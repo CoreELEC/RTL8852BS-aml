@@ -880,7 +880,7 @@ modules:
 
 	$(MAKE) ARCH=$(ARCH) CROSS_COMPILE=$(CROSS_COMPILE) -C $(KSRC) M=$(M)  modules
 
-#	$(CC_STRIP) --strip-unneeded ${OUT_DIR}/$(M)/$(MODULE_NAME).ko
+	$(CC_STRIP) --strip-unneeded ${OUT_DIR}/$(M)/$(MODULE_NAME).ko
 #	cp Module.symvers .symvers.$(MODULE_NAME)
 
 strip:
@@ -896,8 +896,8 @@ uninstall:
 
 modules_install:
 	$(MAKE) INSTALL_MOD_STRIP=1 M=$(M) -C $(KSRC) modules_install
-#	mkdir -p ${OUT_DIR}/../vendor_lib/modules
-#	cd ${OUT_DIR}/$(M)/; find -name $(MODULE_NAME).ko -exec cp {} ${OUT_DIR}/../vendor_lib/modules/ \;
+	mkdir -p ${OUT_DIR}/../vendor_lib/modules
+	cd ${OUT_DIR}/$(M)/; find -name $(MODULE_NAME).ko -exec cp {} ${OUT_DIR}/../vendor_lib/modules/ \;
 
 backup_rtlwifi:
 	@echo "Making backup rtlwifi drivers"
