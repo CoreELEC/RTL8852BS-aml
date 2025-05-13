@@ -1145,7 +1145,7 @@ void rtw_cfg80211_indicate_disconnect(_adapter *padapter, u16 reason, u8 locally
 				GFP_ATOMIC);
 		} else {
 			RTW_INFO(FUNC_ADPT_FMT" call cfg80211_disconnected, reason:%d\n", FUNC_ADPT_ARG(padapter), reason);
-			rtw_cfg80211_disconnected(pwdev, reason, NULL, 0, locally_generated, GFP_ATOMIC);
+			rtw_cfg80211_disconnected(pwdev, reason?reason:WLAN_STATUS_UNSPECIFIED_FAILURE, NULL, 0, locally_generated, GFP_ATOMIC);
 		}
 		#endif
 	}
