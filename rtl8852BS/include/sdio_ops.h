@@ -17,21 +17,16 @@
 
 #include <drv_types.h>		/* struct dvobj_priv, struct sdio_data and etc. */
 
-#ifdef CONFIG_RTW_SDIO_RECORDS
-bool rtw_sdio_records_enabled(void);
-void rtw_sdio_records_clear(void);
-bool rtw_sdio_record_valid(size_t seq);
+#ifdef CONFIG_RTW_IO_RECORDS
 void rtw_sdio_records_dump_title(void *sel, bool tab);
 void rtw_sdio_records_dump_value_by_seq(void *sel, bool tab, size_t seq);
-void rtw_sdio_records_dump(void *sel, bool tab);
+void rtw_sdio_records_summary_dump(void *sel);
 void rtw_sdio_records_claim_and_enable(struct dvobj_priv *d, bool enable);
-void rtw_sdio_records_claim_and_dump(void *sel, struct dvobj_priv *d, bool tab);
-int rtw_sdio_records_init(void);
-void rtw_sdio_records_deinit(void);
-#else
-static inline int rtw_sdio_records_init(void) {return _FAIL;}
-static inline void rtw_sdio_records_deinit(void) {}
-#endif /* CONFIG_RTW_SDIO_RECORDS */
+#define _io_records_dump_title(sel, tab) rtw_sdio_records_dump_title(sel, tab)
+#define _io_records_dump_value_by_seq(sel, tab, seq) rtw_sdio_records_dump_value_by_seq(sel, tab, seq)
+#define _io_records_summary_dump(sel) rtw_sdio_records_summary_dump(sel)
+#define _io_records_claim_and_enable(d, enable) rtw_sdio_records_claim_and_enable(d, enable)
+#endif /* CONFIG_RTW_IO_RECORDS */
 
 int __must_check rtw_sdio_raw_read(struct dvobj_priv *d, unsigned int addr,
 				   void *buf, size_t len, bool fixed);

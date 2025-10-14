@@ -3840,7 +3840,7 @@ _get_bcn_tracking_info(struct phl_info_t *phl, struct rtw_phl_stainfo_t *sta,
 	}
 	acpt_bcn = ((WDOG_PERIOD / b_intvl) * ACPT_BCN) / 100;
 	tgt_bcn = ((WDOG_PERIOD / b_intvl) * TGT_BCN) / 100;
-	PHL_TRACE(COMP_PHL_DBG, _PHL_INFO_, "%s(): tgt_bcn_wdg(%d), acpt_bcn_wdg(%d)\n",
+	PHL_TRACE(COMP_PHL_DBG, _PHL_DEBUG_, "%s(): tgt_bcn_wdg(%d), acpt_bcn_wdg(%d)\n",
 			__func__, tgt_bcn, acpt_bcn);
 	if (bcn_i->num_per_watchdog < acpt_bcn) {
 		goto _rx_middle;
@@ -3959,7 +3959,7 @@ static bool _dist_box_plot(struct rtw_rx_bcn_info *bcn_i)
 		    (bcn_s->bcn_drift[idx] > dist_i->outlier_h))
 			dist_i->outlier_num++;
 	}
-	PHL_TRACE(COMP_PHL_DBG, _PHL_INFO_, "%s: q1(%d), q3(%d), iqr(%d), fence_l(%d), fence_h(%d)\n",
+	PHL_TRACE(COMP_PHL_DBG, _PHL_DEBUG_, "%s: q1(%d), q3(%d), iqr(%d), fence_l(%d), fence_h(%d)\n",
 		__func__, q1, q3, iqr, fence_l, fence_h);
 	return true;
 }

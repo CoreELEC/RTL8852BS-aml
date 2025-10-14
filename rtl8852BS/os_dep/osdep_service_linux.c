@@ -875,24 +875,6 @@ RETURN:
 	return;
 }
 
-#ifdef CONFIG_PLATFORM_SPRD
-#ifdef do_div
-	#undef do_div
-#endif
-	#include <asm-generic/div64.h>
-#endif
-
-u64 rtw_modular64(u64 x, u64 y)
-{
-	return do_div(x, y);
-}
-
-u64 rtw_division64(u64 x, u64 y)
-{
-	do_div(x, y);
-	return x;
-}
-
 inline u32 rtw_random32(void)
 {
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0))

@@ -1462,7 +1462,7 @@ void rtw_surveydone_event_callback(_adapter *adapter, u8 *pbuf)
 
 #ifdef CONFIG_RTW_FSM_BTM
 				if (rtw_to_roam(adapter) == 0)
-					rtw_indicate_disconnect(adapter, 0, _FALSE);
+					rtw_indicate_disconnect(adapter, 0, _TRUE);
 				_clr_fwstate_(pmlmepriv, WIFI_UNDER_LINKING);
 #else
 				if (rtw_to_roam(adapter) != 0) {
@@ -1483,14 +1483,14 @@ void rtw_surveydone_event_callback(_adapter *adapter, u8 *pbuf)
 						rtw_set_to_roam(adapter, 0);
 						if (MLME_IS_ASOC(adapter) == _TRUE)
 							rtw_free_assoc_resources(adapter, _TRUE);
-						rtw_indicate_disconnect(adapter, 0, _FALSE);
+						rtw_indicate_disconnect(adapter, 0, _TRUE);
 					} else
 						pmlmepriv->to_join = _TRUE;
 
 					if (scan_parm)
 						rtw_mfree(scan_parm, sizeof(*scan_parm));
 				} else
-					rtw_indicate_disconnect(adapter, 0, _FALSE);
+					rtw_indicate_disconnect(adapter, 0, _TRUE);
 				_clr_fwstate_(pmlmepriv, WIFI_UNDER_LINKING);
 #endif /* CONFIG_RTW_FSM_BTM */
 			}
@@ -1500,7 +1500,7 @@ void rtw_surveydone_event_callback(_adapter *adapter, u8 *pbuf)
 	else {
 		if (rtw_chk_roam_flags(adapter, RTW_ROAM_ACTIVE)
                 #if (defined(CONFIG_RTW_WNM) && defined(CONFIG_RTW_80211R))
-                        || rtw_ft_chk_flags((adapter), RTW_FT_BTM_ROAM)
+                        || adapter->mlmepriv.need_to_roam == _TRUE
                 #endif
 		) {
 			if (MLME_IS_STA(adapter)
@@ -1511,7 +1511,7 @@ void rtw_surveydone_event_callback(_adapter *adapter, u8 *pbuf)
 						(u8 *)pmlmepriv->roam_network->network.MacAddress);
 #else
 					receive_disconnect(adapter, pmlmepriv->dev_cur_network.network.MacAddress
-						, WLAN_REASON_ACTIVE_ROAM, _FALSE);
+						, WLAN_REASON_ACTIVE_ROAM, _TRUE);
 					pmlmeinfo->disconnect_occurred_time = rtw_systime_to_ms(rtw_get_current_time());
 					pmlmeinfo->disconnect_code = DISCONNECTION_BY_DRIVER_DUE_TO_ROAMING;
 					pmlmeinfo->wifi_reason_code = WLAN_REASON_UNSPECIFIED;
@@ -1706,13 +1706,7 @@ u8 _rtw_sitesurvey_condition_check(const char *caller, _adapter *adapter, bool c
 		goto _exit;
 	}
 #endif /* RTW_BUSY_DENY_SCAN */
-#if 0
-	if (adapter_to_pwrctl(adapter)->bInSuspend == _TRUE) {
-		RTW_INFO("%s bInSuspend scan abort!\n", __func__);
-		ss_condition = SS_DENY_BLOCK_SCAN;
-		goto _exit;
-	}
-#endif
+
 _exit:
 	return ss_condition;
 }
@@ -2171,11 +2165,12 @@ static int scan_complete_cb(void *priv, struct rtw_phl_scan_param *param)
 	#if defined(CONFIG_RTW_CFGVENDOR_RANDOM_MAC_OUI) || defined(CONFIG_RTW_SCAN_RAND)
 	{
 		struct rtw_wdev_priv *pwdev_priv = adapter_wdev_data(padapter);
+		const u8 *mac_addr = wdev_to_ndev(pwdev_priv->rtw_wdev)->dev_addr;
 
 		if (pwdev_priv->random_mac_enabled
 		    && (MLME_IS_STA(padapter))
 		    && (check_fwstate(&padapter->mlmepriv, WIFI_ASOC_STATE) == _FALSE))
-			rtw_set_mac_addr_hw(padapter, wdev_to_ndev(pwdev_priv->rtw_wdev)->dev_addr);
+			rtw_set_mac_addr(padapter, mac_addr, true, true);
 
 		pwdev_priv->random_mac_enabled = false;
 	}
@@ -2246,13 +2241,14 @@ static int scan_start_cb(void *priv, struct rtw_phl_scan_param *param)
 	#if defined(CONFIG_RTW_CFGVENDOR_RANDOM_MAC_OUI) || defined(CONFIG_RTW_SCAN_RAND)
 	{
 		struct rtw_wdev_priv *pwdev_priv = adapter_wdev_data(padapter);
+		const u8 *pno_mac_addr = pwdev_priv->pno_mac_addr;
 
 		if (pwdev_priv->random_mac_enabled
 		    && (MLME_IS_STA(padapter))
 		    && (check_fwstate(&padapter->mlmepriv, WIFI_ASOC_STATE) == _FALSE)) {
 			u16 seq_num;
 
-			rtw_set_mac_addr_hw(padapter, pwdev_priv->pno_mac_addr);
+			rtw_set_mac_addr(padapter, pno_mac_addr, true, true);
 			get_random_bytes(&seq_num, 2);
 			pwdev_priv->pno_scan_seq_num = seq_num & 0xFFF;
 		} else {

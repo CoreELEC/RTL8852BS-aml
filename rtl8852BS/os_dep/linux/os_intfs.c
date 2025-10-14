@@ -50,17 +50,10 @@ static int rtw_net_set_mac_address(struct net_device *pnetdev, void *addr)
 	_adapter *padapter = (_adapter *)rtw_netdev_priv(pnetdev);
 	struct mlme_priv *pmlmepriv = &padapter->mlmepriv;
 	struct sockaddr *sa = (struct sockaddr *)addr;
-	int ret = -1;
-	struct _ADAPTER_LINK *adapter_link;
-	u8 lidx;
+	int ret = -EPERM;
+	u8 result = _FAIL;
+	bool cfg_hw = false;
 
-	/* only the net_device is in down state to permit modifying mac addr */
-	if ((pnetdev->flags & IFF_UP) == _TRUE) {
-		RTW_INFO(FUNC_ADPT_FMT": The net_device's is not in down state\n"
-			 , FUNC_ADPT_ARG(padapter));
-
-		return ret;
-	}
 
 	/* if the net_device is linked, it's not permit to modify mac addr */
 	if (check_fwstate(pmlmepriv, WIFI_UNDER_LINKING) ||
@@ -80,29 +73,22 @@ static int rtw_net_set_mac_address(struct net_device *pnetdev, void *addr)
 		return ret;
 	}
 
-	_rtw_memcpy(adapter_mac_addr(padapter), sa->sa_data, ETH_ALEN); /* set mac addr to adapter */
-	dev_addr_mod(pnetdev, 0, sa->sa_data, ETH_ALEN);
-
-	/* Since the net_device is in down state, there is no wrole at this moment.
-	 * The new mac address will be set to hw when changing the net_device to up state.
-	 */
-
-	RTW_INFO(FUNC_ADPT_FMT": Set Mac Addr to "MAC_FMT" Successfully\n"
-		 , FUNC_ADPT_ARG(padapter), MAC_ARG(sa->sa_data));
-
-	 /* sync mac addr to adapter link */
-	for (lidx = 0; lidx < padapter->adapter_link_num; lidx++) {
-		adapter_link = GET_LINK(padapter, lidx);
-		_rtw_memcpy(adapter_link->mac_addr, sa->sa_data, ETH_ALEN);
-
-		/* offset for adapter_link mac-addr */
-		adapter_link->mac_addr[ETH_ALEN - 1] += lidx;
-
-		RTW_INFO(FUNC_ADPT_FMT": Set adapter link(id=%d) Mac Addr to "MAC_FMT" Successfully\n"
-		 , FUNC_ADPT_ARG(padapter), lidx, MAC_ARG(adapter_link->mac_addr));
+	if (pnetdev->flags & IFF_UP) {
+		RTW_INFO(FUNC_ADPT_FMT": The net_device's is not in down state\n"
+			 , FUNC_ADPT_ARG(padapter));
+		cfg_hw = true;
 	}
 
-	ret = 0;
+	result = rtw_set_mac_addr(padapter, sa->sa_data, cfg_hw, false);
+	if (result == _SUCCESS) {
+		dev_addr_mod(pnetdev, 0, sa->sa_data, ETH_ALEN);
+		RTW_INFO(FUNC_ADPT_FMT": Set Mac Addr to "MAC_FMT" Successfully\n"
+			 , FUNC_ADPT_ARG(padapter), MAC_ARG(sa->sa_data));
+		ret = 0;
+	} else {
+		RTW_ERR("%s: Set Mac Addr to "MAC_FMT" Failed\n", __func__, MAC_ARG(sa->sa_data));
+		ret = -EFAULT;
+	}
 
 	return ret;
 }
@@ -1358,6 +1344,7 @@ u8 rtw_init_drv_sw(_adapter *padapter)
 	padapter->rsvd_page_offset = 0;
 	padapter->rsvd_page_num = 0;
 
+	padapter->cur_tsf_cmd_enqueue = true;
 	padapter->data_fb = 0;
 	padapter->fix_rx_ampdu_accept = RX_AMPDU_ACCEPT_INVALID;
 	padapter->fix_rx_ampdu_size = RX_AMPDU_SIZE_INVALID;
@@ -2518,7 +2505,7 @@ static int netdev_close(struct net_device *pnetdev)
 			if (MLME_IS_STA(padapter) == _FALSE)
 				rtw_free_assoc_resources_cmd(padapter, _TRUE, RTW_CMDF_WAIT_ACK);
 			/* s2-3.  indicate disconnect to os */
-			rtw_indicate_disconnect(padapter, 0, _FALSE);
+			rtw_indicate_disconnect(padapter, 0, _TRUE);
 			/* s2-4. */
 			rtw_free_network_queue(padapter, _TRUE);
 			rtw_free_mld_network_queue(padapter, _TRUE);
@@ -2923,7 +2910,7 @@ int rtw_suspend_free_assoc_resource(_adapter *padapter)
 
 		/* s2-3.  indicate disconnect to os */
 		if (MLME_IS_STA(padapter)) {
-			rtw_indicate_disconnect(padapter, 0, _FALSE);
+			rtw_indicate_disconnect(padapter, 0, _TRUE);
 			pmlmeinfo->disconnect_occurred_time = rtw_systime_to_ms(rtw_get_current_time());
 			pmlmeinfo->disconnect_code = DISCONNECTION_BY_SYSTEM_DUE_TO_SYSTEM_IN_SUSPEND;
 			pmlmeinfo->wifi_reason_code = WLAN_REASON_DEAUTH_LEAVING;
@@ -2941,7 +2928,7 @@ int rtw_suspend_free_assoc_resource(_adapter *padapter)
 
 	if (check_fwstate(pmlmepriv, WIFI_UNDER_LINKING) == _TRUE) {
 		RTW_PRINT("%s: fw_under_linking\n", __FUNCTION__);
-		rtw_indicate_disconnect(padapter, 0, _FALSE);
+		rtw_indicate_disconnect(padapter, 0, _TRUE);
 		pmlmeinfo->disconnect_occurred_time = rtw_systime_to_ms(rtw_get_current_time());
 		pmlmeinfo->disconnect_code = DISCONNECTION_BY_SYSTEM_DUE_TO_SYSTEM_IN_SUSPEND;
 		pmlmeinfo->wifi_reason_code = WLAN_REASON_DEAUTH_LEAVING;
@@ -3288,7 +3275,7 @@ int rtw_resume_process_wow(_adapter *padapter)
 		    wowpriv->wow_wake_reason == RTW_MAC_WOW_RX_DEAUTH)
 			rtw_indicate_disconnect(padapter, pmlmeinfo->wifi_reason_code, _FALSE);
 		else
-			rtw_indicate_disconnect(padapter, 0, _FALSE);
+			rtw_indicate_disconnect(padapter, 0, _TRUE);
 
 		pmlmeinfo->state = WIFI_FW_NULL_STATE;
 

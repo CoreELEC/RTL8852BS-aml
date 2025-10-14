@@ -21,6 +21,7 @@
 
 /* #define USE_PHL_CMD_DISPR */
 
+#define MAX_OBJ_NUM 8
 #define CLOCK_NUM 3
 #define CLOCK_UNIT 10
 #define IS_CLK_OFF(clk) (clk->remain < 0) /* Negative value means disabled */
@@ -1564,48 +1565,81 @@ msg_fail:
 	return _FAIL;
 }
 
+static void fsm_ucast_msg(struct fsm_priv *fsmpriv,
+	struct sta_info *psta, char *pbuf, u32 sz, u16 event)
+{
+	struct fsm_root *root = fsmpriv->root;
+	struct fsm_main *fsm;
+	struct fsm_obj *obj;
+	struct fsm_obj *obj_ary[MAX_OBJ_NUM];
+	int i, obj_num = 0;
+
+	if (!psta)
+		return;
+
+	memset(obj_ary, 0, sizeof(obj_ary));
+
+	list_for_each_entry(fsm, &root->q_share_thd.q, list) {
+		if (fsm_status(fsm) != FSM_STATUS_ENABLE)
+			continue;
+
+		_rtw_spinlock_bh(&fsm->obj_queue.lock);
+		list_for_each_entry(obj, &fsm->obj_queue.q, list) {
+			if (obj->psta == psta) {
+				obj_ary[obj_num++] = obj;
+				if (obj_num > MAX_OBJ_NUM) {
+					FSM_WARN_(obj->fsm, "obj num exceed, event %04x(%s)\n",
+						event, fsm_evt_name(obj->fsm, event));
+					_rtw_spinunlock_bh(&fsm->obj_queue.lock);
+					goto done;
+				}
+			}
+		}
+		_rtw_spinunlock_bh(&fsm->obj_queue.lock);
+	}
+done:
+	for (i = 0; i < obj_num; i++)
+		fsm_gen_msg(obj_ary[i], pbuf, sz,  event);
+}
+
+#if 0
 static void fsm_bcast_msg(struct fsm_priv *fsmpriv,
 	struct sta_info *psta, char *pbuf, u32 sz, u16 event)
 {
 	struct fsm_root *root = fsmpriv->root;
 	struct fsm_main *fsm;
 	struct fsm_obj *obj;
-
-	list_for_each_entry(fsm, &root->q_share_thd.q, list) {
-		if (fsm_status(fsm) != FSM_STATUS_ENABLE)
-			continue;
-		list_for_each_entry(obj, &fsm->obj_queue.q, list) {
-			if (!psta || (psta && obj->psta == psta))
-				fsm_gen_msg(obj, pbuf, sz,  event);
-		}
-	}
-}
-
-void fsm_ucast_msg(struct fsm_priv *fsmpriv,
-	struct sta_info *psta, char *pbuf, u32 sz, u16 event)
-{
-	struct fsm_root *root = fsmpriv->root;
-	struct fsm_main *fsm;
-	struct fsm_obj *obj;
+	struct fsm_obj *obj_ary[MAX_OBJ_NUM];
+	int i, obj_num = 0;
 
 	if (!psta)
 		return;
 
+	memset(obj_ary, 0, sizeof(obj_ary));
+
 	list_for_each_entry(fsm, &root->q_share_thd.q, list) {
-		if (!fsm)
-			return;
 		if (fsm_status(fsm) != FSM_STATUS_ENABLE)
 			continue;
+
+		_rtw_spinlock_bh(&fsm->obj_queue.lock);
 		list_for_each_entry(obj, &fsm->obj_queue.q, list) {
-			if (!obj || obj->psta == NULL)
-				return;
-			if (psta && obj->psta == psta) {
-				fsm_gen_msg(obj, pbuf, sz,  event);
-				return;
+			if (!psta || (psta && obj->psta == psta))
+				obj_ary[obj_num++] = obj;
+				if (obj_num > MAX_OBJ_NUM) {
+					FSM_WARN_(obj->fsm, "obj num exceed, event %04x(%s)\n",
+						event, fsm_evt_name(obj->fsm, event));
+					_rtw_spinunlock_bh(&fsm->obj_queue.lock);
+					goto done;
+				}
 			}
 		}
+		_rtw_spinunlock_bh(&fsm->obj_queue.lock);
 	}
+done:
+	for (i = 0; i < obj_num; i++)
+		fsm_gen_msg(obj_ary[i], pbuf, sz,  event);
 }
+#endif
 
 void rtw_fsm_notify_connect(struct fsm_priv *fsmpriv, struct sta_info *psta, int res)
 {

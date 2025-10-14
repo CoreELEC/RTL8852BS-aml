@@ -2464,6 +2464,160 @@ u32 mac_mdns_ofld(struct mac_ax_adapter *adapter, struct rtw_hal_mac_mdns_ofld *
 	return ret;
 }
 
+u32 mac_apf_ofld_ctrl(struct mac_ax_adapter *adapter
+		, struct rtw_hal_mac_apf_ctrl *papf_ofld_ctrl
+		, enum rtw_fw_type fw_type)
+{
+	u32 ret = 0;
+	u32 val32;
+	u32 *ptr_status = NULL;
+	u32 orig_status = 0;
+	struct rtw_hal_mac_apf_ctrl cfg;
+	struct h2c_info h2c_info = {0};
+	struct mac_ax_intf_ops *ops = adapter_to_intf_ops(adapter);
+
+	struct mac_ax_multicast_info *mc_info_v4;
+	struct mac_ax_multicast_info *mc_info_v6;
+
+	mc_info_v4 = &mac_multicast_info_v4;
+	mc_info_v6 = &mac_multicast_info_v6;
+
+	PLTFM_MSG_TRACE("[APF OFLD] =============>\n");
+
+	if (adapter->apf_info.ptr_status) {
+		ptr_status = adapter->apf_info.ptr_status;
+		orig_status = *ptr_status;
+		PLTFM_MSG_ERR("status %d --> %d\n", orig_status, papf_ofld_ctrl->apf_cmd);
+
+		if (orig_status == APF_DISABLE &&
+		    (papf_ofld_ctrl->apf_cmd != APF_CMD_ENABLE 
+			&& papf_ofld_ctrl->apf_cmd != APF_CMD_STANDBY)) {
+			PLTFM_MSG_TRACE("[APF OFLD] status %d --> %d FW no support\n"
+				       , orig_status, papf_ofld_ctrl->apf_cmd);
+			return MACSUCCESS;
+		}
+
+#if 1
+		if (orig_status == APF_STANDBY &&
+		    papf_ofld_ctrl->apf_cmd == APF_CMD_STANDBY) {
+			PLTFM_MSG_TRACE("[APF OFLD] status %d --> %d FW no support\n"
+				       , orig_status, papf_ofld_ctrl->apf_cmd);
+			//return MACSUCCESS;
+		}
+#endif
+
+		if (papf_ofld_ctrl->apf_cmd == APF_CMD_DISABLE ||
+			papf_ofld_ctrl->apf_cmd == APF_CMD_REPORT) {
+			*ptr_status = APF_UNFINISHED;
+		}
+	} else {
+		return MACPROCERR;
+	}
+
+	if (adapter->sm.fwdl != MAC_AX_FWDL_INIT_RDY)
+		return MACNOFW;
+
+	if (adapter->sm.proxy_st != MAC_AX_PROXY_IDLE)
+		return MACPROCERR;
+
+	PLTFM_MEMCPY(mc_info_v4->mc_addr, mdns_v4_multicast_addr, 6);
+	mc_info_v4->mc_msk = MAC_AX_MSK_NONE;
+
+	PLTFM_MEMCPY(mc_info_v6->mc_addr, mdns_v6_multicast_addr, 6);
+	mc_info_v6->mc_msk = MAC_AX_MSK_NONE;
+
+	cfg = *papf_ofld_ctrl;
+
+	// WOWLAN multicast MAC filter Enable/Disable
+	if (fw_type == RTW_FW_WOWLAN || fw_type == RTW_FW_WOWLAN_CE) {
+		cfg.rx_forward = 0;
+		if (cfg.apf_cmd == APF_CMD_DISABLE) {
+			ret = mac_cfg_multicast(adapter, (u8)cfg.apf_cmd, mc_info_v4);
+			if (ret != MACSUCCESS)
+				PLTFM_MSG_ERR("mac_cfg_multicast del v4 fail = %d\n", ret);
+
+			ret = mac_cfg_multicast(adapter, (u8)cfg.apf_cmd, mc_info_v6);
+			if (ret != MACSUCCESS)
+				PLTFM_MSG_ERR("mac_cfg_multicast del v6 fail ret = %d\n", ret);
+
+			val32 = MAC_REG_R32(R_AX_RX_FLTR_OPT);
+			val32 &= ~B_AX_A_MC_LIST_CAM_MATCH;
+			MAC_REG_W32(R_AX_RX_FLTR_OPT, val32);
+		} else if ((cfg.apf_cmd == APF_CMD_ENABLE) && (orig_status == APF_DISABLE)) {
+			// added MC address cam
+
+			val32 = MAC_REG_R32(R_AX_RX_FLTR_OPT);
+			val32 |= B_AX_A_MC_LIST_CAM_MATCH;
+			MAC_REG_W32(R_AX_RX_FLTR_OPT, val32);
+
+			ret = mac_cfg_multicast(adapter, (u8)cfg.apf_cmd, mc_info_v4);
+			if (ret != MACSUCCESS) {
+				PLTFM_MSG_ERR("mac_cfg_multicast add v4 fail = %d\n", ret);
+				// re-open mulitcase
+				if (ret == MACNPTR) {
+					ret = mac_cfg_multicast(adapter, 0, mc_info_v4);
+					if (ret != MACSUCCESS)
+						PLTFM_MSG_ERR("mac_cfg_multicast del v4 fail = %d\n"
+							     , ret);
+				}
+				ret = mac_cfg_multicast(adapter, (u8)cfg.apf_cmd, mc_info_v4);
+				if (ret != MACSUCCESS)
+					PLTFM_MSG_ERR("mac_cfg_multicast add v4 fail = %d\n", ret);
+			}
+			ret = mac_cfg_multicast(adapter, (u8)cfg.apf_cmd, mc_info_v6);
+			if (ret != MACSUCCESS) {
+				PLTFM_MSG_ERR("mac_cfg_multicast add v6 fail ret = %d\n", ret);
+				// re-open mulitcase
+				if (ret == MACNPTR) {
+					ret = mac_cfg_multicast(adapter, 0, mc_info_v6);
+					if (ret != MACSUCCESS)
+						PLTFM_MSG_ERR("mac_cfg_multicast del v6 fail = %d\n"
+							     , ret);
+				}
+				ret = mac_cfg_multicast(adapter, (u8)cfg.apf_cmd, mc_info_v6);
+				if (ret != MACSUCCESS)
+					PLTFM_MSG_ERR("mac_cfg_multicast add v6 fail = %d\n", ret);
+			}
+		}
+	} else {
+		// if((fw_type == RTW_FW_WOWLAN) || (fw_type == RTW_FW_WOWLAN_CE))
+		cfg.rx_forward = 1;
+	}
+
+	h2c_info.agg_en = 0;
+	h2c_info.content_len = sizeof(struct fwcmd_apf_ofld_ctrl);
+	h2c_info.h2c_cat = FWCMD_H2C_CAT_MAC;
+	h2c_info.h2c_class = FWCMD_H2C_CL_FW_OFLD;
+	h2c_info.h2c_func = FWCMD_H2C_FUNC_APF_OFLD_CTRL;
+	h2c_info.rec_ack = 0;
+	h2c_info.done_ack = 1;
+
+#if 0
+	ret = mac_h2c_common(adapter, &h2c_info, (u32 *)&cfg);
+	if (ret)
+		PLTFM_MSG_ERR("mdns offload h2c fail ret %d\n", ret);
+	else
+		adapter->sm.proxy_st = MAC_AX_PROXY_BUSY;
+#else
+	adapter->sm.proxy_st = MAC_AX_PROXY_BUSY;
+	ret = mac_h2c_common(adapter, &h2c_info, (u32 *)&cfg);
+	if (ret != MACSUCCESS) {
+		PLTFM_MSG_ERR("mdns offload h2c fail ret %d\n", ret);
+		adapter->sm.proxy_st = MAC_AX_PROXY_IDLE;
+	}
+#endif
+	// APF_ENABLE status direct to ENABLE (no report)
+	if (papf_ofld_ctrl->apf_cmd == APF_CMD_ENABLE)
+		*ptr_status = APF_ENABLE;
+
+	// APF_STANDBY status direct to STANDBY (no report)
+	if (papf_ofld_ctrl->apf_cmd == APF_CMD_STANDBY)
+		*ptr_status = APF_STANDBY;
+
+	PLTFM_MSG_TRACE("[APF OFLD] <=============\n");
+	return ret;
+}
+
 u32 mac_apf_ofld(struct mac_ax_adapter *adapter, struct rtw_hal_mac_apf *papf_ofld)
 {
 	u32 ret;
@@ -2652,8 +2806,7 @@ u32 mac_magic_waker_filter(struct mac_ax_adapter *adapter,
 		if ((waker_addr_size - i) != 2) {
 			*waker_addr_dword = cpu_to_le32(*(u32 *)((p_arr)+i));
 			waker_addr_dword++;
-		}
-		else {
+		} else {
 			*(u16 *)waker_addr_dword = cpu_to_le16(*(u16 *)((p_arr)+i));
 			waker_addr_dword++;
 		}
@@ -2756,14 +2909,14 @@ u32 mac_wow_h2c_check(struct mac_ax_adapter *adapter,
 u32 mac_wow_dbg_dump(struct mac_ax_adapter *adapter)
 {
 	u32 ret = MACSUCCESS;
-	PLTFM_MUTEX_LOCK(&adapter->lock_info.err_get_lock);
 
+	PLTFM_MUTEX_LOCK(&adapter->lock_info.err_get_lock);
 #if MAC_AX_FEATURE_DBGPKG
 	ret = fw_st_dbg_dump(adapter);
-    	if (ret) {
-    	    	PLTFM_MSG_ERR("fw_st_dbg_dump fail (%d)\n", ret);
-    	    	return ret;
-    	}
+		if (ret) {
+				PLTFM_MSG_ERR("fw_st_dbg_dump fail (%d)\n", ret);
+				return ret;
+		}
 #endif
 #if MAC_AX_FEATURE_DBGPKG
 #if MAC_AX_PCIE_SUPPORT

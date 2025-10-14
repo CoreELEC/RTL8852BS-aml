@@ -520,6 +520,10 @@ struct thread_hdl{
 #define CLR_THREAD_STATUS(t, cl)	(t->thread_status &= ~(cl))
 #define CHK_THREAD_STATUS(t, ck) (t->thread_status & ck)
 
+#define RTW_TASK_COMM_LEN TASK_COMM_LEN
+static inline void rtw_get_task_comm(char *dst) { memcpy(dst, current->comm, RTW_TASK_COMM_LEN); }
+static inline unsigned int rtw_get_cpu_id(void) { return smp_processor_id(); }
+
 typedef void timer_hdl_return;
 typedef void *timer_hdl_context;
 
@@ -603,6 +607,39 @@ static inline void flush_signals_thread(void)
 	#define DMA_BIT_MASK(n) (((n) == 64) ? ~0ULL : ((1ULL<<(n))-1))
 #endif
 
+#define CONFIG_OSDEP_DIV64_API
+
+static inline u64 rtw_modular64(u64 x, u64 y)
+{
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 12, 0))
+	u64 r = 0;
+#else
+	u32 r = 0;
+#endif
+
+	if (0 == y)
+		return 0;
+
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 12, 0))
+	div64_u64_rem(x, y, &r);
+#else
+	WARN_ON(y > U32_MAX);
+	div_u64_rem(x, y, &r);
+#endif
+
+	return r;
+}
+
+static inline u64 rtw_division64(u64 x, u64 y)
+{
+	return (0 != y) ? div64_u64(x, y) : 0;
+}
+
+static inline s64 rtw_division64_s64(s64 x, s64 y)
+{
+	return (0 != y) ? div64_s64(x, y) : 0;
+}
+
 typedef unsigned long systime;
 typedef ktime_t sysptime;
 
@@ -615,7 +652,11 @@ static inline sysptime rtw_sptime_get(void)
 
 static inline sysptime rtw_sptime_get_raw(void)
 {
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 17, 0))
 	return ktime_get_raw(); /* CLOCK_MONOTONIC_RAW */
+#else
+	return ktime_get(); /* CLOCK_MONOTONIC */
+#endif
 }
 
 static inline sysptime rtw_sptime_set(s64 secs, const u32 nsecs)
@@ -644,16 +685,6 @@ static inline int rtw_sptime_cmp(const sysptime cmp1, const sysptime cmp2)
 		return 1;
 	return 0;
 #endif
-}
-
-static inline bool rtw_sptime_eql(const sysptime cmp1, const sysptime cmp2)
-{
-	return rtw_sptime_cmp(cmp1, cmp2) == 0;
-}
-
-static inline bool rtw_sptime_is_zero(const sysptime sptime)
-{
-	return rtw_sptime_cmp(sptime, rtw_sptime_zero()) == 0;
 }
 
 /*
@@ -712,63 +743,6 @@ static inline s64 rtw_sptime_to_ns(const sysptime sptime)
 static inline sysptime rtw_ns_to_sptime(u64 ns)
 {
 	return ns_to_ktime(ns);
-}
-
-static inline s64 rtw_sptime_diff_ms(const sysptime start, const sysptime end)
-{
-	sysptime diff;
-
-	diff = rtw_sptime_sub(end, start);
-
-	return rtw_sptime_to_ms(diff);
-}
-
-static inline s64 rtw_sptime_pass_ms(const sysptime start)
-{
-	sysptime cur, diff;
-
-	cur = rtw_sptime_get();
-	diff = rtw_sptime_sub(cur, start);
-
-	return rtw_sptime_to_ms(diff);
-}
-
-static inline s64 rtw_sptime_diff_us(const sysptime start, const sysptime end)
-{
-	sysptime diff;
-
-	diff = rtw_sptime_sub(end, start);
-
-	return rtw_sptime_to_us(diff);
-}
-
-static inline s64 rtw_sptime_pass_us(const sysptime start)
-{
-	sysptime cur, diff;
-
-	cur = rtw_sptime_get();
-	diff = rtw_sptime_sub(cur, start);
-
-	return rtw_sptime_to_us(diff);
-}
-
-static inline s64 rtw_sptime_diff_ns(const sysptime start, const sysptime end)
-{
-	sysptime diff;
-
-	diff = rtw_sptime_sub(end, start);
-
-	return rtw_sptime_to_ns(diff);
-}
-
-static inline s64 rtw_sptime_pass_ns(const sysptime start)
-{
-	sysptime cur, diff;
-
-	cur = rtw_sptime_get();
-	diff = rtw_sptime_sub(cur, start);
-
-	return rtw_sptime_to_ns(diff);
 }
 
 /*tasklet*/
@@ -1286,8 +1260,10 @@ static inline void rtw_dump_stack(void)
 #define rtw_warn_on(condition) \
 	do { \
 		if (condition) { \
+			RTW_WARN("RTW_WARN_ON triggered: =====> START\n"); \
 			WARN_ON(1); \
 			ATOMIC_INC((ATOMIC_T *)&rtw_warn_on_cnt); \
+			RTW_WARN("RTW_WARN_ON triggered: <===== END\n"); \
 		} \
 	} while (0)
 

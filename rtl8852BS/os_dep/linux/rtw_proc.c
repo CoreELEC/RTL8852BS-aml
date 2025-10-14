@@ -696,55 +696,57 @@ exit:
 	return count;
 }
 #endif /* DBG_SDIO */
+#endif /* CONFIG_SDIO_HCI */
 
-#ifdef CONFIG_RTW_SDIO_RECORDS
+#ifdef CONFIG_RTW_IO_RECORDS
+#include <rtw_io_records.h>
 
-static bool sdio_records_ori_enabled;
+static bool io_records_ori_enabled;
 
-static void *proc_start_sdio_records(struct seq_file *m, loff_t *pos)
+static void *proc_start_io_records(struct seq_file *m, loff_t *pos)
 {
 	size_t seq = *pos;
 
 	if (seq == 0) {
-		sdio_records_ori_enabled = rtw_sdio_records_enabled();
-		if (sdio_records_ori_enabled) {
+		io_records_ori_enabled = rtw_io_records_enabled();
+		if (io_records_ori_enabled) {
 			struct net_device *dev = m->private;
 			_adapter *adapter = rtw_netdev_priv(dev);
 
 			/* ori enabled, claim and disable */
-			rtw_sdio_records_claim_and_enable(adapter_to_dvobj(adapter), false);
+			rtw_io_records_claim_and_enable(adapter_to_dvobj(adapter), false);
 		}
 	}
 
-	if (!rtw_sdio_record_valid(seq))
+	if (!rtw_io_record_valid(seq))
 		return NULL;
 	return pos;
 }
 
-static void proc_stop_sdio_records(struct seq_file *m, void *v)
+static void proc_stop_io_records(struct seq_file *m, void *v)
 {
 	if (!v) {
-		if (sdio_records_ori_enabled && !rtw_sdio_records_enabled()) {
+		if (io_records_ori_enabled && !rtw_io_records_enabled()) {
 			struct net_device *dev = m->private;
 			_adapter *adapter = rtw_netdev_priv(dev);
 
 			/* ori enabled and disabled now, claim and enable */
-			rtw_sdio_records_claim_and_enable(adapter_to_dvobj(adapter), true);
+			rtw_io_records_claim_and_enable(adapter_to_dvobj(adapter), true);
 		}
 	}
 }
 
-static void *proc_next_sdio_records(struct seq_file *m, void *v, loff_t *pos)
+static void *proc_next_io_records(struct seq_file *m, void *v, loff_t *pos)
 {
 	size_t seq = ++(*pos);
 
-	if (!rtw_sdio_record_valid(seq))
+	if (!rtw_io_record_valid(seq))
 		return NULL;
 
 	return pos;
 }
 
-static int proc_get_sdio_records(struct seq_file *m, void *v)
+static int proc_get_io_records(struct seq_file *m, void *v)
 {
 	struct net_device *dev = m->private;
 	_adapter *adapter = (_adapter *)rtw_netdev_priv(dev);
@@ -752,13 +754,13 @@ static int proc_get_sdio_records(struct seq_file *m, void *v)
 	bool tab = false;
 
 	if (seq == 0)
-		rtw_sdio_records_dump_title(m, tab);
-	rtw_sdio_records_dump_value_by_seq(m, tab, seq);
+		rtw_io_records_dump_title(m, tab);
+	rtw_io_records_dump_value_by_seq(m, tab, seq);
 
 	return 0;
 }
 
-static int proc_get_sdio_records_tab(struct seq_file *m, void *v)
+static int proc_get_io_records_tab(struct seq_file *m, void *v)
 {
 	struct net_device *dev = m->private;
 	_adapter *adapter = (_adapter *)rtw_netdev_priv(dev);
@@ -766,27 +768,27 @@ static int proc_get_sdio_records_tab(struct seq_file *m, void *v)
 	bool tab = true;
 
 	if (seq == 0)
-		rtw_sdio_records_dump_title(m, tab);
-	rtw_sdio_records_dump_value_by_seq(m, tab, seq);
+		rtw_io_records_dump_title(m, tab);
+	rtw_io_records_dump_value_by_seq(m, tab, seq);
 
 	return 0;
 }
 
-static struct seq_operations seq_ops_sdio_records = {
-	.start = proc_start_sdio_records,
-	.stop  = proc_stop_sdio_records,
-	.next  = proc_next_sdio_records,
-	.show  = proc_get_sdio_records,
+static struct seq_operations seq_ops_io_records = {
+	.start = proc_start_io_records,
+	.stop  = proc_stop_io_records,
+	.next  = proc_next_io_records,
+	.show  = proc_get_io_records,
 };
 
-static struct seq_operations seq_ops_sdio_records_tab = {
-	.start = proc_start_sdio_records,
-	.stop  = proc_stop_sdio_records,
-	.next  = proc_next_sdio_records,
-	.show  = proc_get_sdio_records_tab,
+static struct seq_operations seq_ops_io_records_tab = {
+	.start = proc_start_io_records,
+	.stop  = proc_stop_io_records,
+	.next  = proc_next_io_records,
+	.show  = proc_get_io_records_tab,
 };
 
-static ssize_t proc_set_sdio_records(struct file *file, const char __user *buffer, size_t count, loff_t *pos, void *data)
+static ssize_t proc_set_io_records(struct file *file, const char __user *buffer, size_t count, loff_t *pos, void *data)
 {
 	char tmp[32];
 	int enable;
@@ -807,22 +809,47 @@ static ssize_t proc_set_sdio_records(struct file *file, const char __user *buffe
 			_adapter *adapter = rtw_netdev_priv(dev);
 			struct dvobj_priv *dvobj = adapter_to_dvobj(adapter);
 
-			if (rtw_sdio_records_enabled() && !enable) {
+			if (rtw_io_records_enabled() && !enable) {
 				/* on -> off */
-				rtw_sdio_records_claim_and_enable(dvobj, false);
-			} else if (!rtw_sdio_records_enabled() && enable) {
+				rtw_io_records_claim_and_enable(dvobj, false);
+			} else if (!rtw_io_records_enabled() && enable) {
 				/* off -> on */
-				rtw_sdio_records_clear();
-				rtw_sdio_records_claim_and_enable(dvobj, true);
+				rtw_io_records_clear();
+				rtw_io_records_claim_and_enable(dvobj, true);
 			}
 		}
 	}
 
 	return count;
 }
-#endif /* CONFIG_RTW_SDIO_RECORDS */
 
-#endif /* CONFIG_SDIO_HCI */
+static int proc_get_io_records_enabled(struct seq_file *m, void *v)
+{
+	RTW_PRINT_SEL(m, "%d\n", rtw_io_records_enabled());
+
+	return 0;
+}
+
+static int proc_get_io_records_summary(struct seq_file *m, void *v)
+{
+	struct net_device *dev = m->private;
+	_adapter *adapter = rtw_netdev_priv(dev);
+	struct dvobj_priv *dvobj = adapter_to_dvobj(adapter);
+	bool ori_en = rtw_io_records_enabled();
+
+	if (ori_en)
+		rtw_io_records_claim_and_enable(dvobj, false);
+
+	rtw_io_records_summary_dump(m);
+
+	if (ori_en) {
+		rtw_io_records_clear();
+		rtw_io_records_claim_and_enable(dvobj, true);
+	}
+
+	return 0;
+}
+#endif /* CONFIG_RTW_IO_RECORDS */
 
 static int proc_get_mac_reg_dump(struct seq_file *m, void *v)
 {
@@ -1783,6 +1810,42 @@ static int proc_get_sta_tp_info(struct seq_file *m, void *v)
 		rtw_sta_traffic_info(m, padapter);
 
 	return 0;
+}
+
+static int proc_get_rt_cap_ctrl(struct seq_file *m, void *v)
+{
+	struct net_device *dev = m->private;
+	_adapter *padapter = (_adapter *)rtw_netdev_priv(dev);
+
+
+	RTW_PRINT_SEL(m, "[%d] MBO = %s\n", DIS_MBO,
+		      (padapter->dis_rt_cap & BIT(DIS_MBO))?"DIS":"EN");
+
+	RTW_PRINT_SEL(m, "Disabled runtime CAP = 0x%08x\n", padapter->dis_rt_cap);
+
+	return 0;
+}
+
+static ssize_t proc_set_rt_cap_ctrl(struct file *file, const char __user *buffer, size_t count, loff_t *pos, void *data)
+{
+	struct net_device *dev = data;
+	_adapter *padapter = (_adapter *)rtw_netdev_priv(dev);
+	char tmp[32] = {0};
+	int num = 0;
+	u32 param = 0;
+
+	if (count < 1)
+		return -EFAULT;
+
+	if (count > sizeof(tmp))
+		return -EFAULT;
+
+	if (buffer && !copy_from_user(tmp, buffer, count)) {
+		num = sscanf(tmp, "%x", &param);
+		padapter->dis_rt_cap = param;
+	}
+
+	return count;
 }
 
 static int proc_get_turboedca_ctrl(struct seq_file *m, void *v)
@@ -5491,13 +5554,14 @@ const struct rtw_proc_hdl adapter_proc_hdls[] = {
 #ifdef DBG_SDIO
 	RTW_PROC_HDL_SSEQ("sdio_dbg", proc_get_sdio_dbg, proc_set_sdio_dbg),
 #endif /* DBG_SDIO */
-
-#ifdef CONFIG_RTW_SDIO_RECORDS
-	RTW_PROC_HDL_SEQ("sdio_records", &seq_ops_sdio_records, proc_set_sdio_records),
-	RTW_PROC_HDL_SEQ("sdio_records_tab", &seq_ops_sdio_records_tab, proc_set_sdio_records),
-#endif
-
 #endif /* CONFIG_SDIO_HCI */
+
+#ifdef CONFIG_RTW_IO_RECORDS
+	RTW_PROC_HDL_SEQ("io_records", &seq_ops_io_records, proc_set_io_records),
+	RTW_PROC_HDL_SEQ("io_records_tab", &seq_ops_io_records_tab, proc_set_io_records),
+	RTW_PROC_HDL_SSEQ("io_records_enabled", proc_get_io_records_enabled, NULL),
+	RTW_PROC_HDL_SSEQ("io_records_summary", proc_get_io_records_summary, NULL),
+#endif
 
 	RTW_PROC_HDL_SSEQ("del_rx_ampdu_test_case", NULL, proc_set_del_rx_ampdu_test_case),
 	RTW_PROC_HDL_SSEQ("wait_hiq_empty", NULL, proc_set_wait_hiq_empty),
@@ -5559,6 +5623,7 @@ const struct rtw_proc_hdl adapter_proc_hdls[] = {
 	RTW_PROC_HDL_SSEQ("tx_amsdu", proc_get_tx_amsdu, proc_set_tx_amsdu),
 	RTW_PROC_HDL_SSEQ("tx_amsdu_rate", proc_get_tx_amsdu_rate, proc_set_tx_amsdu_rate),
 #endif
+	RTW_PROC_HDL_SSEQ("tx_max_agg_time", proc_get_tx_max_agg_time, proc_set_tx_max_agg_time),
 #endif /* CONFIG_80211N_HT */
 
 #ifdef CONFIG_80211AC_VHT
@@ -5579,6 +5644,7 @@ const struct rtw_proc_hdl adapter_proc_hdls[] = {
 	RTW_PROC_HDL_SSEQ("sta_tp_dump", proc_get_sta_tp_dump, proc_set_sta_tp_dump),
 	RTW_PROC_HDL_SSEQ("sta_tp_info", proc_get_sta_tp_info, NULL),
 	RTW_PROC_HDL_SSEQ("dis_turboedca", proc_get_turboedca_ctrl, proc_set_turboedca_ctrl),
+	RTW_PROC_HDL_SSEQ("dis_rt_cap", proc_get_rt_cap_ctrl, proc_set_rt_cap_ctrl),
 	RTW_PROC_HDL_SSEQ("tx_info_msg", proc_get_tx_info_msg, NULL),
 	RTW_PROC_HDL_SSEQ("rx_info_msg", proc_get_rx_info_msg, proc_set_rx_info_msg),
 	RTW_PROC_HDL_SSEQ("false_alarm_accumulated",
@@ -5642,8 +5708,8 @@ const struct rtw_proc_hdl adapter_proc_hdls[] = {
 	RTW_PROC_HDL_SSEQ("wow_mdns_offload_state", proc_get_wow_mdns_offload_state, proc_set_wow_mdns_offload_state),
 	RTW_PROC_HDL_SSEQ("wow_mdns_passthru_behavior", proc_get_wow_mdns_passthru_behavior, proc_set_wow_mdns_passthru_behavior),
 #endif
-#ifdef CONFIG_WOW_APF
-	RTW_PROC_HDL_SSEQ("wow_apf", proc_get_wow_apf, proc_set_wow_apf),
+#ifdef CONFIG_APF
+	RTW_PROC_HDL_SSEQ("apf", proc_get_apf, proc_set_apf),
 #endif
 #endif /* CONFIG_WOWLAN */
 
@@ -5679,6 +5745,9 @@ const struct rtw_proc_hdl adapter_proc_hdls[] = {
 	#if CONFIG_DFS_SLAVE_WITH_RADAR_DETECT
 	RTW_PROC_HDL_SSEQ("dfs_slave_with_rd", proc_get_dfs_slave_with_rd, proc_set_dfs_slave_with_rd),
 	#endif
+#endif
+#ifdef CONFIG_BCN_CNT_CONFIRM_HDL
+	RTW_PROC_HDL_SSEQ("new_bcn_max", proc_get_new_bcn_max, proc_set_new_bcn_max),
 #endif
 	RTW_PROC_HDL_SSEQ("sink_udpport", proc_get_udpport, proc_set_udpport),
 #ifdef DBG_RX_COUNTER_DUMP
@@ -5888,6 +5957,8 @@ const struct rtw_proc_hdl adapter_proc_hdls[] = {
 #ifdef CONFIG_USB_HCI
 	RTW_PROC_HDL_SSEQ("usb_mode", proc_get_usb_mode, proc_set_usb_mode),
 #endif
+	RTW_PROC_HDL_SSEQ("cur_tsf", proc_get_cur_tsf, NULL),
+	RTW_PROC_HDL_SSEQ("cur_tsf_cmd_enqueue", proc_get_cur_tsf_cmd_enqueue, proc_set_cur_tsf_cmd_enqueue),
 };
 
 const int adapter_proc_hdls_num = sizeof(adapter_proc_hdls) / sizeof(struct rtw_proc_hdl);

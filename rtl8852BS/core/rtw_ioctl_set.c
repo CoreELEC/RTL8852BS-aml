@@ -246,7 +246,7 @@ u8 rtw_set_802_11_bssid(_adapter *padapter, u8 *bssid)
 			if (check_fwstate(pmlmepriv, WIFI_ASOC_STATE) == _TRUE) {
 				if (MLME_IS_STA(padapter) == _FALSE)
 					rtw_free_assoc_resources_cmd(padapter, _TRUE, 0);
-				rtw_indicate_disconnect(padapter, 0, _FALSE);
+				rtw_indicate_disconnect(padapter, 0, _TRUE);
 				pmlmeinfo->disconnect_occurred_time = rtw_systime_to_ms(rtw_get_current_time());
 				pmlmeinfo->disconnect_code = DISCONNECTION_BY_SYSTEM_DUE_TO_HIGH_LAYER_COMMAND;
 				pmlmeinfo->wifi_reason_code = WLAN_REASON_UNSPECIFIED;
@@ -322,7 +322,7 @@ u8 rtw_set_802_11_ssid(_adapter *padapter, NDIS_802_11_SSID *ssid)
 
 					if (check_fwstate(pmlmepriv, WIFI_ASOC_STATE) == _TRUE) {
 						rtw_free_assoc_resources_cmd(padapter, _TRUE, 0);
-						rtw_indicate_disconnect(padapter, 0, _FALSE);
+						rtw_indicate_disconnect(padapter, 0, _TRUE);
 						pmlmeinfo->disconnect_occurred_time = rtw_systime_to_ms(rtw_get_current_time());
 						pmlmeinfo->disconnect_code = DISCONNECTION_BY_SYSTEM_DUE_TO_HIGH_LAYER_COMMAND;
 						pmlmeinfo->wifi_reason_code = WLAN_REASON_UNSPECIFIED;
@@ -342,7 +342,7 @@ u8 rtw_set_802_11_ssid(_adapter *padapter, NDIS_802_11_SSID *ssid)
 			if (check_fwstate(pmlmepriv, WIFI_ASOC_STATE) == _TRUE){
 				if (MLME_IS_STA(padapter) == _FALSE)
 					rtw_free_assoc_resources_cmd(padapter, _TRUE, 0);
-				rtw_indicate_disconnect(padapter, 0, _FALSE);
+				rtw_indicate_disconnect(padapter, 0, _TRUE);
 				pmlmeinfo->disconnect_occurred_time = rtw_systime_to_ms(rtw_get_current_time());
 				pmlmeinfo->disconnect_code = DISCONNECTION_BY_SYSTEM_DUE_TO_HIGH_LAYER_COMMAND;
 				pmlmeinfo->wifi_reason_code = WLAN_REASON_UNSPECIFIED;
@@ -493,7 +493,7 @@ u8 rtw_set_802_11_infrastructure_mode(_adapter *padapter,
 
 		if ((*pold_state == Ndis802_11Infrastructure) || (*pold_state == Ndis802_11IBSS)) {
 			if (is_linked == _TRUE) {
-				rtw_indicate_disconnect(padapter, 0, _FALSE); /*will clr Linked_state; before this function, we must have checked whether issue dis-assoc_cmd or not*/
+				rtw_indicate_disconnect(padapter, 0, _TRUE); /*will clr Linked_state; before this function, we must have checked whether issue dis-assoc_cmd or not*/
 				pmlmeinfo->disconnect_occurred_time = rtw_systime_to_ms(rtw_get_current_time());
 				pmlmeinfo->disconnect_code = DISCONNECTION_BY_SYSTEM_DUE_TO_HIGH_LAYER_COMMAND;
 				pmlmeinfo->wifi_reason_code = WLAN_REASON_UNSPECIFIED;
@@ -568,7 +568,7 @@ u8 rtw_set_802_11_disassociate(_adapter *padapter)
 		/* modify for CONFIG_IEEE80211W, none 11w can use it */
 		if (MLME_IS_STA(padapter) == _FALSE)
 			rtw_free_assoc_resources_cmd(padapter, _TRUE, 0);
-		rtw_indicate_disconnect(padapter, 0, _FALSE);
+		rtw_indicate_disconnect(padapter, 0, _TRUE);
 		pmlmeinfo->disconnect_occurred_time = rtw_systime_to_ms(rtw_get_current_time());
 		pmlmeinfo->disconnect_code = DISCONNECTION_BY_SYSTEM_DUE_TO_HIGH_LAYER_COMMAND;
 		pmlmeinfo->wifi_reason_code = WLAN_REASON_UNSPECIFIED;
@@ -742,7 +742,7 @@ u16 rtw_get_cur_max_rate(_adapter *adapter)
 					}
 				}
 			} else {
-			
+
 				if (rate > max_rate)
 					max_rate = rate;
 

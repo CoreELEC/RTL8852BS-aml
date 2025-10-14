@@ -535,7 +535,7 @@ int rtw_mp_rate(struct net_device *dev,
 
 	pextra += sprintf(pextra, "Set data rate to %s index %d\n" , input, padapter->mppriv.rateidx);
 	RTW_INFO("%s: %s rate index=%d\n", __func__, input, padapter->mppriv.rateidx);
-	pextra += sprintf(pextra, "PPDU Type %s\n", 
+	pextra += sprintf(pextra, "PPDU Type %s\n",
 								PPDU_TYPE_STR(pmp_priv->rtw_mp_pmact_ppdu_type));
 	pextra += sprintf(pextra, "CMD: [mp_plcp_datappdu=%%d]\nPLCP (PPDU Type):\n");
 	for (i = pmp_priv->rtw_mp_pmact_ppdu_type; i <= RTW_MP_TYPE_HE_TB; i++)
@@ -638,7 +638,7 @@ int rtw_mp_trxsc_offset(struct net_device *dev,
 	pmp_priv->rtw_mp_trxsc = trxsc_offset;
 	rtw_mp_update_trxsc(padapter);
 	_rtw_memset(extra, 0, wrqu->length);
-	sprintf(extra, "change TRXSC to %d, current Bandwidth=%d\n", 
+	sprintf(extra, "change TRXSC to %d, current Bandwidth=%d\n",
 						pmp_priv->rtw_mp_trxsc, pmp_priv->bandwidth);
 
 	wrqu->length = strlen(extra);
@@ -1207,7 +1207,7 @@ int rtw_mp_arx(struct net_device *dev,
 			RTW_INFO("%s: cnts=%d\n", __func__, cnts);
 			RTW_INFO("%s: data=%s\n", __func__, tmp[1]);
 			for (jj = 0, kk = 0; jj < cnts ; jj++, kk += 2) {
-				pmppriv->network_macaddr[jj] = 
+				pmppriv->network_macaddr[jj] =
 					key_2char2num(tmp[1][kk], tmp[1][kk + 1]);
 				RTW_INFO("network_macaddr[%d]=%x\n",
 					jj, pmppriv->network_macaddr[jj]);
@@ -1402,6 +1402,8 @@ int rtw_mp_arx(struct net_device *dev,
 		char *pcar = extra;
 		u8 i = 0;
 
+		rtw_mp_phl_rx_cal_cmd(padapter);
+
 		if (strncmp(input, "rssi a", 6) == 0)
 			rssi_path = 0;
 		else if (strncmp(input, "rssi b", 6) == 0)
@@ -1412,7 +1414,7 @@ int rtw_mp_arx(struct net_device *dev,
 		if (all_path_num > 1) {
 			rssi_path = 0;
 			all_path_num = all_path_num - 1;
-		} else 
+		} else
 			all_path_num = rssi_path;
 
 		RTW_INFO("%s:Query RSSI Path:%d to %d\n", __func__, rssi_path, all_path_num);
@@ -2267,7 +2269,7 @@ int rtw_mp_mon(struct net_device *dev,
 		/*rtw_disassoc_cmd(padapter, 0, 0);*/
 		if (check_fwstate(pmlmepriv, WIFI_ASOC_STATE) == _TRUE) {
 			rtw_disassoc_cmd(padapter, 500, 0);
-			rtw_indicate_disconnect(padapter, 0, _FALSE);
+			rtw_indicate_disconnect(padapter, 0, _TRUE);
 			/*rtw_free_assoc_resources_cmd(padapter, _TRUE, 0);*/
 		}
 		sprintf(extra, "monitor mode Stop\n");
@@ -2372,7 +2374,7 @@ int rtw_mp_tx(struct net_device *dev,
 	if (copy_from_user(extra, wrqu->data.pointer, wrqu->data.length))
 		return -EFAULT;
 	*(extra + wrqu->data.length) = '\0';
-#if 0	
+#if 0
 #ifdef CONFIG_CONCURRENT_MODE
 	if (!is_primary_adapter(padapter)) {
 		sprintf(extra, "Error: MP mode can't support Virtual adapter, Please to use main adapter.\n");
@@ -2794,7 +2796,7 @@ int rtw_mp_rx(struct net_device *dev,
 		strcat(extra, "\nstart Rx");
 		SetPacketRx(padapter, bStartRx, _FALSE);
 	}
-#endif	
+#endif
 	wrqu->data.length = strlen(extra);
 	return 0;
 }
@@ -2847,12 +2849,12 @@ int rtw_mp_pwrlmt(struct net_device *dev,
 	if (strncmp(extra, "off", 3) == 0 && strlen(extra) < 4) {
 		if (rtw_mpt_set_power_limit_en(padapter, _FALSE))
 			sprintf(extra, "Turn off Power Limit\n");
-		else 
+		else
 			sprintf(extra, "Turn off Power Limit Fail\n");
 	} else if (strncmp(extra, "on", 2) == 0 && strlen(extra) < 3) {
 		if (rtw_mpt_set_power_limit_en(padapter, _TRUE))
 			sprintf(extra, "Turn on Power Limit\n");
-		else 
+		else
 			sprintf(extra, "Turn on Power Limit Fail\n");
 	} else
 #endif
@@ -3002,7 +3004,7 @@ int rtw_mp_tx_plcp_tx_data(struct net_device *dev,
 				RTW_INFO("%s: ppdu_type=%d\n", __func__, ppdu_type);
 				_rtw_memset(extra, 0, wrqu->data.length);
 
-				pextra += sprintf(pextra, "Config PPDU Type %s to %s\n", 
+				pextra += sprintf(pextra, "Config PPDU Type %s to %s\n",
 						PPDU_TYPE_STR(pmp_priv->rtw_mp_pmact_ppdu_type), PPDU_TYPE_STR(ppdu_type));
 				pmp_priv->rtw_mp_pmact_ppdu_type = ppdu_type;
 
@@ -3664,7 +3666,7 @@ int rtw_mp_link(struct net_device *dev,
 					}
 					_rtw_memset(pmp_priv->mplink_buf, '\0' , sizeof(pmp_priv->mplink_buf));
 					pmp_priv->mplink_brx = _FALSE;
-	
+
 		}
 	} else if (btxdata) {
 		struct pkt_attrib *pattrib;

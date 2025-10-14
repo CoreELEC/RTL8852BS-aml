@@ -205,7 +205,7 @@ sint	_rtw_init_mlme_priv(_adapter *padapter)
 #if defined(CONFIG_RTW_WNM) || defined(CONFIG_RTW_80211K) || defined(CONFIG_RTW_FSM_RRM)
 	rtw_roam_nb_info_init(padapter);
 	pmlmepriv->ch_cnt = 0;
-#endif	
+#endif
 #endif
 #endif
 
@@ -1259,7 +1259,7 @@ int is_same_network(WLAN_BSSID_EX *src, WLAN_BSSID_EX *dst)
 	d_cap = le16_to_cpu(d_cap);
 
 	/* Wi-Fi driver doesn't consider the situation of BCN and ProbRsp sent from the same hidden AP,
-	  * it considers these two packets are sent from different AP. 
+	  * it considers these two packets are sent from different AP.
 	  * Therefore, the scan queue may store two scan results of the same hidden AP, likes below.
 	  *
 	  *  index            bssid              ch    RSSI   SdBm  Noise   age          flag             ssid
@@ -3065,7 +3065,7 @@ void rtw_stadel_event_callback(_adapter *adapter, u8 *pbuf)
 		/* _rtw_spinunlock_bh(&(pstapriv->sta_hash_lock)); */
 
 		if (adapter->stapriv.asoc_sta_count == 1) { /* a sta + bc/mc_stainfo (not Ibss_stainfo) */
-			/* rtw_indicate_disconnect(adapter); */ /* removed@20091105 */
+			/* rtw_indicate_disconnect(adapter, stadel->locally_generated); */ /* removed@20091105 */
 			_rtw_spinlock_bh(&(pmlmepriv->scanned_queue.lock));
 			_rtw_spinlock_bh(&(pmlmepriv->scanned_mld_queue.lock));
 			/* free old ibss network */
@@ -3158,6 +3158,13 @@ void rtw_join_timeout_handler(void *ctx)
 	if (RTW_CANNOT_RUN(adapter_to_dvobj(adapter)))
 		return;
 
+	/* SAE auth timeout, send association request to force trigger disconnected by AP */
+	if ((check_fwstate(pmlmepriv, WIFI_STATION_STATE) == _TRUE) &&
+	    (pmlmeinfo->state & WIFI_FW_AUTH_STATE) &&
+	    rtw_sec_chk_auth_type(adapter, MLME_AUTHTYPE_SAE)) {
+		RTW_INFO("%s: issue_assocreq due to SAE auth timeout.\n", __FUNCTION__);
+		issue_assocreq(adapter);
+	}
 
 	_rtw_spinlock_bh(&pmlmepriv->lock);
 
@@ -3183,7 +3190,7 @@ void rtw_join_timeout_handler(void *ctx)
 				/* rtw_ft_clr_flags(adapter, RTW_FT_PEER_EN|RTW_FT_PEER_OTD_EN); */
 				rtw_ft_reset_status(adapter);
 #endif
-				rtw_indicate_disconnect(adapter, pmlmepriv->join_status, _FALSE);
+				rtw_indicate_disconnect(adapter, pmlmepriv->join_status, _TRUE);
 				pmlmeinfo->disconnect_occurred_time = rtw_systime_to_ms(rtw_get_current_time());
 				pmlmeinfo->disconnect_code = DISCONNECTION_BY_DRIVER_DUE_TO_JOINBSS_TIMEOUT;
 				pmlmeinfo->wifi_reason_code = WLAN_REASON_UNSPECIFIED;
@@ -3194,7 +3201,7 @@ void rtw_join_timeout_handler(void *ctx)
 	} else
 #endif
 	{
-		rtw_indicate_disconnect(adapter, pmlmepriv->join_status, _FALSE);
+		rtw_indicate_disconnect(adapter, pmlmepriv->join_status, _TRUE);
 		pmlmeinfo->disconnect_occurred_time = rtw_systime_to_ms(rtw_get_current_time());
 		pmlmeinfo->disconnect_code = DISCONNECTION_BY_DRIVER_DUE_TO_JOINBSS_TIMEOUT;
 		pmlmeinfo->wifi_reason_code = WLAN_REASON_UNSPECIFIED;
@@ -3203,7 +3210,7 @@ void rtw_join_timeout_handler(void *ctx)
 
 #ifdef CONFIG_IOCTL_CFG80211
 		/* indicate disconnect for the case that join_timeout and check_fwstate != FW_LINKED */
-		rtw_cfg80211_indicate_disconnect(adapter, pmlmepriv->join_status, _FALSE);
+		rtw_cfg80211_indicate_disconnect(adapter, pmlmepriv->join_status, _TRUE);
 #endif /* CONFIG_IOCTL_CFG80211 */
 	}
 
@@ -3224,7 +3231,7 @@ void rtw_join_timeout_handler(void *ctx)
 void rtw_mlme_reset_auto_scan_int(_adapter *adapter, u8 *reason)
 {
 #if defined(CONFIG_RTW_MESH) && defined(CONFIG_DFS_MASTER)
-#if CONFIG_RTW_MESH_OFFCH_CAND 
+#if CONFIG_RTW_MESH_OFFCH_CAND
 	struct rf_ctl_t *rfctl = adapter_to_rfctl(adapter);
 #endif
 #endif
@@ -3591,7 +3598,7 @@ static void collect_traffic_statistics(_adapter *padapter)
 	dynamic_napi_th_chk (padapter);
 #endif /* CONFIG_RTW_NAPI_DYNAMIC */
 #endif
-	
+
 }
 
 static void rtw_accumulate_fa_count(struct dvobj_priv *dvobj)
@@ -3686,6 +3693,9 @@ void rtw_core_watchdog_sw_hdlr(void *drv_priv)
 	rtw_mi_keep_alive_pre_chk_hdl(adapter);
 	rtw_dynamic_chk_wk_sw_hdl(adapter);
 	rtw_accumulate_fa_count(pdvobj);
+#ifdef CONFIG_APF
+	rtw_apf_cmd_hdl(adapter, PHL_APF_CMD_CHECK);
+#endif
 
 exit:
 	return;
@@ -3763,7 +3773,7 @@ int rtw_check_roaming_candidate(struct mlme_priv *mlme
 	if (rtw_wnm_btm_diff_bss(adapter, pnb) &&
 		rtw_wnm_btm_roam_candidate(adapter, pnb, competitor)) {
 		goto update;
-	}	
+	}
 #endif
 #endif
 #ifdef DBG_WNM_UNIT_TEST
@@ -4031,7 +4041,7 @@ candidate_exist:
 			rtw_disassoc_cmd(adapter, 0, 0);
 			if (MLME_IS_STA(adapter) == _FALSE)
 				rtw_free_assoc_resources_cmd(adapter, _TRUE, 0);
-			rtw_indicate_disconnect(adapter, 0, _FALSE);
+			rtw_indicate_disconnect(adapter, 0, _TRUE);
 
 			pmlmeinfo->disconnect_occurred_time = rtw_systime_to_ms(rtw_get_current_time());
 			pmlmeinfo->disconnect_code = DISCONNECTION_BY_DRIVER_DUE_TO_CONNECTION_EXIST;
@@ -4703,7 +4713,7 @@ unsigned int rtw_restructure_ht_ie(_adapter *padapter,
 				}
 			}
 			/* IOT issue : AP TP-Link WDR6500 */
-			if(oper_bw == CHANNEL_WIDTH_40){ 
+			if(oper_bw == CHANNEL_WIDTH_40) {
 				p = rtw_get_ie(in_ie, WLAN_EID_HT_CAP, &ielen, in_len);
 				if (p && ielen == HT_CAP_IE_LEN) {
 					oper_bw = GET_HT_CAP_ELE_CHL_WIDTH(p + 2)  ? CHANNEL_WIDTH_40 : CHANNEL_WIDTH_20;
@@ -5331,11 +5341,17 @@ void rtw_append_extended_cap(_adapter *padapter,
 		rtw_add_ext_cap_info(ext_cap_data, ext_cap_data_len, OP_MODE_NOTIFICATION);
 #endif /* CONFIG_80211AC_VHT */
 #ifdef CONFIG_RTW_WNM
-	rtw_add_ext_cap_info(ext_cap_data, ext_cap_data_len, BSS_TRANSITION);
+	if (padapter->dis_rt_cap & BIT(DIS_MBO))
+		rtw_remove_ext_cap_info(ext_cap_data, ext_cap_data_len, BSS_TRANSITION);
+	else
+		rtw_add_ext_cap_info(ext_cap_data, ext_cap_data_len, BSS_TRANSITION);
 #endif
 
 #ifdef CONFIG_RTW_MBO
-	rtw_add_ext_cap_info(ext_cap_data, ext_cap_data_len, INTERWORKING);
+	if (padapter->dis_rt_cap & BIT(DIS_MBO))
+		rtw_remove_ext_cap_info(ext_cap_data, ext_cap_data_len, INTERWORKING);
+	else
+		rtw_add_ext_cap_info(ext_cap_data, ext_cap_data_len, INTERWORKING);
 #endif
 
 #ifdef CONFIG_ECSA_PHL
@@ -5455,7 +5471,7 @@ void _rtw_roaming(_adapter *padapter, struct wlan_network *tgt_network, u8 roam_
 					/* rtw_ft_clr_flags(padapter, RTW_FT_PEER_EN|RTW_FT_PEER_OTD_EN); */
 					rtw_ft_reset_status(padapter);
 #endif
-					rtw_indicate_disconnect(padapter, 0, _FALSE);
+					rtw_indicate_disconnect(padapter, 0, _TRUE);
 					pmlmeinfo->disconnect_occurred_time = rtw_systime_to_ms(rtw_get_current_time());
 					pmlmeinfo->disconnect_code = DISCONNECTION_BY_DRIVER_DUE_TO_LAYER2_ROAMING_TERMINATE;
 					pmlmeinfo->wifi_reason_code = WLAN_REASON_UNSPECIFIED;
@@ -5949,9 +5965,9 @@ static enum phl_mdl_ret_code _connect_abort(void* dispr, void *priv)
 		/* ref: rtw_join_timeout_handler() */
 		_rtw_spinlock_bh(&a->mlmepriv.lock);
 		a->mlmepriv.join_status = WLAN_STATUS_UNSPECIFIED_FAILURE;
-		rtw_indicate_disconnect(a, a->mlmepriv.join_status, _FALSE);
+		rtw_indicate_disconnect(a, a->mlmepriv.join_status, _TRUE);
 #ifdef CONFIG_IOCTL_CFG80211
-		rtw_cfg80211_indicate_disconnect(a, a->mlmepriv.join_status, _FALSE);
+		rtw_cfg80211_indicate_disconnect(a, a->mlmepriv.join_status, _TRUE);
 #endif /* CONFIG_IOCTL_CFG80211 */
 		a->mlmepriv.join_status = 0;
 		_rtw_spinunlock_bh(&a->mlmepriv.lock);
@@ -6744,9 +6760,9 @@ static enum phl_mdl_ret_code _disconnect_msg_hdlr(void* dispr, void* priv,
 	/* ToDo CONFIG_RTW_MLD: [currently primary link only]
 	** May use other way to restore the link */
 	struct _ADAPTER_LINK *alink = GET_PRIMARY_LINK(a);
+	struct mlme_priv *pmlmepriv = &a->mlmepriv;
 	#ifdef CONFIG_DBCC_SUPPORT
 	struct rtw_mr_chctx_info mr_cc_info = {0};
-	struct mlme_priv *pmlmepriv = &a->mlmepriv;
 	#endif
 
 	RTW_DBG(FUNC_ADPT_FMT ": + msg_id=0x%08x\n",
@@ -6780,7 +6796,7 @@ static enum phl_mdl_ret_code _disconnect_msg_hdlr(void* dispr, void* priv,
 			|| rtw_mr_is_ecsa_running(a)
 #endif
 #ifdef CONFIG_RTW_80211R
-			|| rtw_ft_chk_flags(a, RTW_FT_BTM_ROAM)
+			|| pmlmepriv->roam_network
 #endif
 #endif
 		   )

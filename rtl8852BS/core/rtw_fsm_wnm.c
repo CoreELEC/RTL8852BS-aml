@@ -558,7 +558,7 @@ static int btm_roam_st_hdl(void *obj, u16 event, void *param)
 		}
 
 		receive_disconnect(a, pmlmepriv->dev_cur_network.network.MacAddress
-			, WLAN_REASON_ACTIVE_ROAM, _FALSE);
+			, WLAN_REASON_ACTIVE_ROAM, _TRUE);
 		break;
 	case FSM_EV_DISCONNECTED:
 		FSM_INFO(pbtm, "roaming to %s(" MAC_FMT ")\n",
@@ -612,7 +612,7 @@ static int btm_end_st_hdl(void *obj, u16 event, void *param)
 			rtw_set_to_roam(a, 0);
 			rtw_ft_reset_status(a);
 			if (pbtm->candidate) /* driver disconnected */
-				rtw_indicate_disconnect(a, 0, _FALSE);
+				rtw_indicate_disconnect(a, 0, _TRUE);
 		}
 		btm_del_obj(pbtm);
 		break;

@@ -891,14 +891,15 @@ u32 mac_sifs_chk_cca_en(struct mac_ax_adapter *adapter, u8 band, u8 en)
 	if (en) {
 		reg = band == MAC_AX_BAND_1 ? R_AX_CCA_CONTROL_C1 : R_AX_CCA_CONTROL;
 		val32 = MAC_REG_R32(reg);
-		val32 |= (B_AX_SIFS_CHK_CCA_S80 | B_AX_SIFS_CHK_CCA_S40 |
-			  B_AX_SIFS_CHK_CCA_S20 | B_AX_SIFS_CHK_EDCCA);
+//		val32 |= (B_AX_SIFS_CHK_CCA_S80 | B_AX_SIFS_CHK_CCA_S40 |
+//			  B_AX_SIFS_CHK_CCA_S20 | B_AX_SIFS_CHK_EDCCA);
+		val32 |= B_AX_SIFS_CHK_EDCCA;
 		MAC_REG_W32(reg, val32);
 	} else {
 		reg = band == MAC_AX_BAND_1 ? R_AX_CCA_CONTROL_C1 : R_AX_CCA_CONTROL;
 		val32 = MAC_REG_R32(reg);
 		val32 &= ~(B_AX_SIFS_CHK_CCA_S80 | B_AX_SIFS_CHK_CCA_S40 |
-			   B_AX_SIFS_CHK_CCA_S20 | B_AX_SIFS_CHK_EDCCA);
+			   B_AX_SIFS_CHK_CCA_S20);
 		MAC_REG_W32(reg, val32);
 	}
 

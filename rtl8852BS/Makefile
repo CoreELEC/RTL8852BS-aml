@@ -145,20 +145,12 @@ USE_TRUE_PHY = y
 CONFIG_RTW_MBO = y
 # CONFIG_RTKM - n/m/y for not support / standalone / built-in
 CONFIG_RTKM ?= n
-########################## Android ###########################
-# CONFIG_RTW_ANDROID - 0: no Android, 4/5/6/7/8/9/10/11/12 : Android version
-CONFIG_RTW_ANDROID = 13
-
-ifeq ($(shell test $(CONFIG_RTW_ANDROID) -gt 0; echo $$?), 0)
-EXTRA_CFLAGS += -DCONFIG_RTW_ANDROID=$(CONFIG_RTW_ANDROID)
-endif
-
 ########################## Debug ###########################
 CONFIG_RTW_DEBUG = y
 # default log level is _DRV_INFO_ = 4,
 # please refer to "How_to_set_driver_debug_log_level.doc" to set the available level.
-CONFIG_RTW_LOG_LEVEL = 0
-CONFIG_RTW_PHL_LOG_LEVEL = 0
+CONFIG_RTW_LOG_LEVEL = 4
+CONFIG_RTW_PHL_LOG_LEVEL = 4
 
 # CONFIG_RTW_APPEND_LOGLEVEL decide if append kernel log level to each messages.
 # default "n" for don't append.
@@ -191,21 +183,21 @@ endif
 EXTRA_CFLAGS += -DRTW_NETWORK_LINK_MAX=$(RTW_NETWORK_LINK_MAX)
 EXTRA_CFLAGS += -DDTYPE=$(DTYPE)
 ######################## Wake On Lan ##########################
-CONFIG_WOWLAN = n
+CONFIG_WOWLAN = y
 # CONFIG_WAKE_TYPE definition:
 #    bit0: magic packet
 #    bit1: unicast packet (default pattern match)
 #    bit2: disconnect (beacon loss & deauth/dissociation)
 #    bit3: customized pattern match
 #    bit4: pairwise key rekey
-CONFIG_WAKEUP_TYPE = 0x0f
+CONFIG_WAKEUP_TYPE = 0x1f
 CONFIG_GOOGLE_CAST_WAKEUP = n
 CONFIG_WOW_IPS_MODE = default
 CONFIG_WOW_LPS_MODE = default
 #bit0: disBBRF off, #bit1: Wireless remote controller (WRC)
 CONFIG_SUSPEND_TYPE = 0
 CONFIG_WOW_STA_MIX = n
-CONFIG_GPIO_WAKEUP = n
+CONFIG_GPIO_WAKEUP = y
 # Please contact with RTK support team first. After getting the agreement from RTK support team, 
 # you are just able to modify the CONFIG_WAKEUP_GPIO_IDX with customized requirement.
 CONFIG_WAKEUP_GPIO_IDX = default
@@ -214,7 +206,7 @@ CONFIG_HIGH_ACTIVE_DEV2HST = n
 CONFIG_TOGGLE_PULSE = 0
 CONFIG_PULSE_COUNT = 3
 CONFIG_MDNS_OFFLOAD = n
-CONFIG_WOW_APF = n
+CONFIG_APF = y
 ######### only for USB #########
 CONFIG_ONE_PIN_GPIO = n
 CONFIG_HIGH_ACTIVE_HST2DEV = n
@@ -248,6 +240,12 @@ CONFIG_BTC_EXT_CFG_ESOC_TYPE = 0
 #                         from customer platform (unit: dB)
 CONFIG_BTC_EXT_CFG_ANT_ISO_DB = default
 
+#### Trigger bcn comparison or disconnect after N consecutive mismatched beacons ####
+CONFIG_BCN_CNT_CONFIRM_HDL = y
+# Number of consecutive mismatched beacon keys before beacon comparison and disconnect
+# CONFIG_BCN_NEW_MAX_CNT = 0 will skip the beacon check
+CONFIG_BCN_NEW_MAX_CNT = 3
+
 ###################### Platform Related #######################
 CONFIG_PLATFORM_I386_PC = n
 CONFIG_PLATFORM_RTL8198D = n
@@ -262,6 +260,50 @@ CONFIG_PLATFORM_AML_S905 = y
 CONFIG_PLATFORM_AML_S905_L3A = n
 CONFIG_PLATFORM_HUANGLONG = n
 CONFIG_PLATFORM_ARM_ROCKCHIP = n
+
+########################## Android ###########################
+# CONFIG_RTW_ANDROID - 0: no Android, 10 - 16 : Android version
+CONFIG_RTW_ANDROID = 16
+
+ifeq ($(shell test $(CONFIG_RTW_ANDROID) -gt 0; echo $$?), 0)
+EXTRA_CFLAGS += -DCONFIG_RTW_ANDROID=$(CONFIG_RTW_ANDROID)
+CONFIG_GOOGLE_CAST_WAKEUP = n
+
+# For BAZEL BUILD
+CONFIG_GKI_BAZEL = y
+
+ifeq ($(CONFIG_GKI_BAZEL), y)
+# UNUSED DUMMY INFO
+KERNELRELEASE = GKI
+KVER  := $(shell uname -r)
+KSRC := /lib/modules/$(KVER)/build
+DRV_FOLDER = $(notdir $(shell pwd))
+src = .
+
+# USED FOR BUILD.bazel
+FILEGROUP_LIST = _PLATFORM_FILES _CORE_FILES _OS_INTFS_FILES _PHL_FILES _HAL_MAC_FILES _BTC_FILES _HAL_RF_FILES _HAL_FILES _HAL_IC_FILES _HAL_BB_FILES
+KERNEL_BUILD = //common:rtkstb_tv
+DEP = //common:all_headers
+#TEXT_HDRS = core/regdb/rtw_regdb_rtk_common.c
+EXTRA_CFLAGS += -I./core/regdb
+
+# COMPILER OPTION
+EXTRA_CFLAGS += -Wno-uninitialized
+EXTRA_CFLAGS += -Wno-enum-conversion
+EXTRA_CFLAGS += -Wno-fortify-source
+EXTRA_CFLAGS += -Wno-invalid-source-encoding
+EXTRA_CFLAGS += -Wno-tautological-pointer-compare
+EXTRA_CFLAGS += -Wno-tautological-overlap-compare
+EXTRA_CFLAGS += -Wno-pointer-bool-conversion
+EXTRA_CFLAGS += -Wno-parentheses-equality
+EXTRA_CFLAGS += -Wno-self-assign
+EXTRA_CFLAGS += -Wno-header-guard
+EXTRA_CFLAGS += -Wno-implicit-fallthrough
+EXTRA_CFLAGS += -Wno-unused-but-set-parameter
+EXTRA_CFLAGS += -Wno-array-bounds
+EXTRA_CFLAGS += -Wno-undef
+endif
+endif
 
 ########### CUSTOMER ################################
 
@@ -398,6 +440,7 @@ endif
 ifeq ($(CONFIG_MP_INCLUDED), y)
 #MODULE_NAME := $(MODULE_NAME)_mp
 EXTRA_CFLAGS += -DCONFIG_MP_INCLUDED
+EXTRA_CFLAGS += -DRTW_MP_INIT_IN_MP_START
 CONFIG_PHL_TEST_SUITE = y
 endif
 
@@ -560,7 +603,7 @@ EXTRA_CFLAGS += -DCONFIG_RTW_EDCCA_MODE_SEL=2
 else ifeq ($(CONFIG_RTW_EDCCA_MODE_SEL), CBP)
 EXTRA_CFLAGS += -DCONFIG_RTW_EDCCA_MODE_SEL=3
 else ifeq ($(CONFIG_RTW_EDCCA_MODE_SEL), AUTO)
-EXTRA_CFLAGS += -DCONFIG_RTW_EDCCA_MODE_SEL=0xFF
+EXTRA_CFLAGS += -DCONFIG_RTW_EDCCA_MODE_SEL=255
 endif
 
 ifeq ($(CONFIG_RTW_ADAPTIVITY_EN), disable)
@@ -595,6 +638,13 @@ ifeq ($(CONFIG_80211W), y)
 EXTRA_CFLAGS += -DCONFIG_IEEE80211W
 endif
 
+ifeq ($(CONFIG_APF), y)
+EXTRA_CFLAGS += -DCONFIG_APF
+EXTRA_CFLAGS += -DCONFIG_APF_DBG
+#EXTRA_CFLAGS += -DCONFIG_APF_DBG_DUMP
+CONFIG_WOWLAN = y
+endif
+
 ifeq ($(CONFIG_WOWLAN), y)
 EXTRA_CFLAGS += -DCONFIG_WOWLAN -DRTW_WAKEUP_EVENT=$(CONFIG_WAKEUP_TYPE)
 EXTRA_CFLAGS += -DRTW_SUSPEND_TYPE=$(CONFIG_SUSPEND_TYPE)
@@ -616,6 +666,11 @@ EXTRA_CFLAGS += -DCONFIG_RTW_SDIO_PM_KEEP_POWER
 endif
 endif
 
+ifeq ($(CONFIG_BCN_CNT_CONFIRM_HDL), y)
+EXTRA_CFLAGS += -DCONFIG_BCN_CNT_CONFIRM_HDL
+EXTRA_CFLAGS += -DRTW_BCN_NEW_MAX_CNT=$(CONFIG_BCN_NEW_MAX_CNT)
+endif
+
 ifeq ($(CONFIG_LAYER2_ROAMING), y)
 	EXTRA_CFLAGS += -DCONFIG_LAYER2_ROAMING -DCONFIG_ROAMING_FLAG=$(CONFIG_ROAMING_FLAG)
 	EXTRA_CFLAGS += -DCONFIG_ROAM_SCAN_ORDER=$(CONFIG_ROAM_SCAN_ORDER)
@@ -627,11 +682,6 @@ endif
 
 ifeq ($(CONFIG_MDNS_OFFLOAD), y)
 EXTRA_CFLAGS += -DCONFIG_MDNS_OFFLOAD
-endif
-
-ifeq ($(CONFIG_WOW_APF), y)
-EXTRA_CFLAGS += -DCONFIG_WOW_APF
-EXTRA_CFLAGS += -DCONFIG_WOW_APF_DBG
 endif
 
 ifeq ($(CONFIG_GPIO_WAKEUP), y)
@@ -809,6 +859,14 @@ EXTRA_CFLAGS += -I$(src)/platform
 #_PLATFORM_FILES := platform/platform_ops.o
 OBJS += $(_PLATFORM_FILES)
 
+KER_MAJOR_6 := $(shell cd $(KSRC); echo `make kernelversion | cut -d. -f1` \>= 6 | bc -l)
+KER_MINOR_13 := $(shell cd $(KSRC); echo `make kernelversion | cut -d. -f2` \>= 13 | bc -l)
+ifeq ($(KER_MAJOR_6), 1)
+ifeq ($(KER_MINOR_13), 1)
+export KBUILD_ABS_SRCTREE := 1
+endif
+endif
+
 ########### CUSTOMER ################################
 USER_MODULE_NAME ?=
 ifneq ($(USER_MODULE_NAME),)
@@ -869,6 +927,14 @@ obj-$(CONFIG_RTL8852BS) += $(RTKM_MODULE).o
 endif
 endif
 
+# For Android GKI
+generate_build_bazel:
+	@echo "Listing all variables..." > makefile_var
+	@$(foreach var,$(.VARIABLES), \
+		$(if $(filter-out environment% default automatic, $(origin $(var))), \
+			echo $(var) = $($(var)) >> makefile_var;))
+	python3 gen_build_bazel.py
+
 else
 
 export CONFIG_RTL8852BS = m
@@ -880,7 +946,7 @@ modules:
 
 	$(MAKE) ARCH=$(ARCH) CROSS_COMPILE=$(CROSS_COMPILE) -C $(KSRC) M=$(M)  modules
 
-	$(CC_STRIP) --strip-unneeded ${OUT_DIR}/$(M)/$(MODULE_NAME).ko
+#	$(CC_STRIP) --strip-unneeded ${OUT_DIR}/$(M)/$(MODULE_NAME).ko
 #	cp Module.symvers .symvers.$(MODULE_NAME)
 
 strip:
@@ -896,8 +962,8 @@ uninstall:
 
 modules_install:
 	$(MAKE) INSTALL_MOD_STRIP=1 M=$(M) -C $(KSRC) modules_install
-	mkdir -p ${OUT_DIR}/../vendor_lib/modules
-	cd ${OUT_DIR}/$(M)/; find -name $(MODULE_NAME).ko -exec cp {} ${OUT_DIR}/../vendor_lib/modules/ \;
+#	mkdir -p ${OUT_DIR}/../vendor_lib/modules
+#	cd ${OUT_DIR}/$(M)/; find -name $(MODULE_NAME).ko -exec cp {} ${OUT_DIR}/../vendor_lib/modules/ \;
 
 backup_rtlwifi:
 	@echo "Making backup rtlwifi drivers"
@@ -960,6 +1026,7 @@ endif
 
 ############ ANDROID COMMON KERNEL ############
 # Convert to absolute path
+ifeq ($(CONFIG_GKI_BAZEL), n)
 ifneq ($(srctree),)
 _EXTRA_CFLAGS :=
 _INC_CFLAGS :=
@@ -974,4 +1041,5 @@ $(foreach flag,$(subst -I,,$(_INC_CFLAGS)),\
  $(shell if test -d $(srctree)/$(flag); then echo -I$$(cd $(srctree)/$(flag) && pwd); else echo -I$(flag); fi)\
 )
 EXTRA_CFLAGS := $(_EXTRA_CFLAGS) $(_INC_CFLAGS)
+endif
 endif

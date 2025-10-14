@@ -11,18 +11,19 @@ endif
 
 # default setting for Android
 # config CONFIG_RTW_ANDROID in main Makefile
-
+ifeq ($(CONFIG_GKI_BAZEL), n)
 ARCH ?= arm64
 CROSS_COMPILE ?= /home/Jimmy/amlogic_905x4+8852AS/skw-rtk/cross_compile_toolchain/gcc-linaro-6.3.1-2017.02-x86_64_aarch64-linux-gnu/bin/aarch64-linux-gnu-
 ifndef KSRC
 #KSRC := /home/sd4ce/sdk/amlogic_905x4_8852ae/kernel_headers
 #KSRC += O=/home/sd4ce/sdk/amlogic_905x4_8852ae/KERNEL_OBJ
 KSRC := $(KERNEL_SRC)
+EXTRA_CFLAGS += $(foreach d,$(shell test -d $(KERNEL_SRC)/$(M) && find $(shell cd $(KERNEL_SRC)/$(M);pwd) -type d),$(shell echo " -I$(d)"))
+endif
 endif
 
 #Add by amlogic
 EXTRA_CFLAGS += -w -Wno-return-type
-EXTRA_CFLAGS += $(foreach d,$(shell test -d $(KERNEL_SRC)/$(M) && find $(shell cd $(KERNEL_SRC)/$(M);pwd) -type d),$(shell echo " -I$(d)"))
 ifeq ($(CONFIG_PCI_HCI), y)
 EXTRA_CFLAGS += -DUSE_AML_PCIE_TEE_MEM
 endif

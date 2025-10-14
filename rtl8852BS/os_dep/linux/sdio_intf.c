@@ -15,6 +15,7 @@
 #define _HCI_INTF_C_
 
 #include <drv_types.h>
+#include <rtw_io_records.h>
 #include <platform_ops.h>
 extern struct rtw_intf_ops sdio_ops;
 
@@ -1042,7 +1043,7 @@ static int __init rtw_drv_entry(void)
 	rtw_nlrtw_init();
 	rtw_ndev_notifier_register();
 	rtw_inetaddr_notifier_register();
-	rtw_sdio_records_init();
+	rtw_io_records_init();
 
 	ret = sdio_register_driver(&sdio_drvpriv.rtw_sdio_drv);
 	if (ret != 0) {
@@ -1052,7 +1053,7 @@ static int __init rtw_drv_entry(void)
 		rtw_nlrtw_deinit();
 		rtw_ndev_notifier_unregister();
 		rtw_inetaddr_notifier_unregister();
-		rtw_sdio_records_deinit();
+		rtw_io_records_deinit();
 		RTW_INFO("%s: register driver failed!!(%d)\n", __FUNCTION__, ret);
 		goto poweroff;
 	}
@@ -1084,7 +1085,7 @@ static void __exit rtw_drv_halt(void)
 	rtw_nlrtw_deinit();
 	rtw_ndev_notifier_unregister();
 	rtw_inetaddr_notifier_unregister();
-	rtw_sdio_records_deinit();
+	rtw_io_records_deinit();
 
 	RTW_PRINT("module exit success\n");
 

@@ -24,7 +24,7 @@
 
 /*
  * RTW_BUSY_DENY_SCAN control if scan would be denied by busy traffic.
- * When this defined, BUSY_TRAFFIC_SCAN_DENY_PERIOD would be used to judge if 
+ * When this defined, BUSY_TRAFFIC_SCAN_DENY_PERIOD would be used to judge if
  * scan request coming from scan UI. Scan request from scan UI would be
  * exception and never be denied by busy traffic.
  */
@@ -59,11 +59,11 @@
 	#ifndef CONFIG_PLATFORM_ANDROID
 	#define CONFIG_PLATFORM_ANDROID
 	#endif
-	
+
 	#ifndef CONFIG_IOCTL_CFG80211
 	#define CONFIG_IOCTL_CFG80211
 	#endif
-	
+
 	#ifndef RTW_USE_CFG80211_STA_EVENT
 	#define RTW_USE_CFG80211_STA_EVENT
 	#endif
@@ -124,7 +124,7 @@
 	#endif
 	#if (CONFIG_RTW_ANDROID >= 10)
 	#ifndef CONFIG_RTW_CFGVENDOR_WIFI_OFFLOAD
-	//#define CONFIG_RTW_CFGVENDOR_WIFI_OFFLOAD
+	#define CONFIG_RTW_CFGVENDOR_WIFI_OFFLOAD
 	#endif
 	#ifndef CONFIG_KERNEL_PATCH_EXTERNAL_AUTH
 	#define CONFIG_KERNEL_PATCH_EXTERNAL_AUTH
@@ -301,7 +301,7 @@
 #endif
 
 #ifndef CONFIG_RTW_EDCCA_MODE_SEL
-#define CONFIG_RTW_EDCCA_MODE_SEL 0 /* 0:RTW_EDCCA_NORM, 0xFF:RTW_EDCCA_AUTO */
+#define CONFIG_RTW_EDCCA_MODE_SEL 0 /* 0:RTW_EDCCA_NORM, 255:RTW_EDCCA_AUTO */
 #endif
 
 #ifndef CONFIG_RTW_ADAPTIVITY_EN
@@ -489,7 +489,7 @@
 	#define NR_TBTX_SLOT			4
 	#define NR_MAXSTA_INSLOT		5
 	#define TBTX_TX_DURATION		30
-	
+
 	#define MAX_TXPAUSE_DURATION	(TBTX_TX_DURATION*NR_TBTX_SLOT)
 #endif
 
@@ -623,20 +623,20 @@ power down etc.) in last time, we can unmark this flag to avoid some unpredictab
 /*Don't release SDIO irq in suspend/resume procedure*/
 #define CONFIG_RTW_SDIO_KEEP_IRQ	0
 
-#ifdef CONFIG_RTW_SDIO_RECORDS
-	#ifndef CONFIG_RTW_SDIO_RECORDS_STATIC
-	#define CONFIG_RTW_SDIO_RECORDS_STATIC 0
+#ifdef CONFIG_RTW_IO_RECORDS
+	#ifndef CONFIG_RTW_IO_RECORDS_STATIC
+	#define CONFIG_RTW_IO_RECORDS_STATIC 0
 	#endif
-	#ifndef CONFIG_RTW_SDIO_RECORDS_NUM
-	#define CONFIG_RTW_SDIO_RECORDS_NUM 30000
+	#ifndef CONFIG_RTW_IO_RECORDS_NUM
+	#define CONFIG_RTW_IO_RECORDS_NUM 30000
 	#endif
-	#ifndef CONFIG_RTW_SDIO_RECORDS_ENABLE
-	#define CONFIG_RTW_SDIO_RECORDS_ENABLE true
+	#ifndef CONFIG_RTW_IO_RECORDS_ENABLE
+	#define CONFIG_RTW_IO_RECORDS_ENABLE true
 	#endif
-	#ifndef CONFIG_RTW_SDIO_RECORDS_LOOP
-	#define CONFIG_RTW_SDIO_RECORDS_LOOP true
+	#ifndef CONFIG_RTW_IO_RECORDS_LOOP
+	#define CONFIG_RTW_IO_RECORDS_LOOP true
 	#endif
-#endif /* CONFIG_RTW_SDIO_RECORDS */
+#endif /* CONFIG_RTW_IO_RECORDS */
 
 #ifdef CONFIG_RTW_HOSTAPD_ACS
 	#ifdef CONFIG_FIND_BEST_CHANNEL
@@ -681,8 +681,8 @@ power down etc.) in last time, we can unmark this flag to avoid some unpredictab
 #ifdef CONFIG_WOWLAN
 
 #ifndef CONFIG_APF_VERSION
-#undef CONFIG_WOW_APF
-#undef CONFIG_WOW_APF_DBG
+#undef CONFIG_APF
+#undef CONFIG_APF_DBG
 #endif /* CONFIG_APF_VERSION */
 
 #ifdef CONFIG_RTW_IPS_WOW
@@ -727,7 +727,7 @@ power down etc.) in last time, we can unmark this flag to avoid some unpredictab
 
 #ifdef CONFIG_PCI_BCN_POLLING
 #define CONFIG_BCN_ICF
-#endif 
+#endif
 
 #if !defined (CONFIG_PCI_MSI) || defined (CONFIG_RTW_FORCE_PCI_MSI_DISABLE)
 #define CONFIG_RTW_PCI_MSI_DISABLE

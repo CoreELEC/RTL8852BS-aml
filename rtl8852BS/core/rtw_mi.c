@@ -586,7 +586,7 @@ static u8 _rtw_mi_disconnect(_adapter *adapter, void *data)
 			disc_code = ((struct disconnect_data *)data)->disc_code;
 
 		rtw_disassoc_cmd(adapter, 500, RTW_CMDF_DIRECTLY);
-		rtw_indicate_disconnect(adapter, 0, _FALSE);
+		rtw_indicate_disconnect(adapter, 0, _TRUE);
 
 		if (disc_code == DISCONNECTION_BY_DRIVER_DUE_TO_EACH_IFACE_CHBW_NOT_SYNC) {
 			mlmeinfo->disconnect_occurred_time = rtw_systime_to_ms(rtw_get_current_time());

@@ -250,6 +250,7 @@ int rtw_rfctl_init(struct dvobj_priv *dvobj)
 	rtw_rfctl_cis_init(rfctl, regsty);
 #endif
 
+	rfctl->edcca_mode_sel = regsty->edcca_mode_sel;
 	rfctl->last_edcca_mode_op_band = BAND_MAX;
 
 	rtw_rfctl_dfs_init(rfctl, regsty);
@@ -1437,7 +1438,7 @@ unsigned int OnProbeRsp(_adapter *padapter, union recv_frame *precv_frame)
 		{
 			if (!rtw_check_bcn_info(padapter, padapter_link, pframe, precv_frame->u.hdr.len)) {
 				RTW_PRINT(FUNC_ADPT_FMT" ap has changed, disconnect now\n", FUNC_ADPT_ARG(padapter));
-				receive_disconnect(padapter, lmlmeinfo->network.MacAddress , 0, _FALSE);
+				receive_disconnect(padapter, lmlmeinfo->network.MacAddress , 0, _TRUE);
 				pmlmeinfo->disconnect_occurred_time = rtw_systime_to_ms(rtw_get_current_time());
 				pmlmeinfo->disconnect_code = DISCONNECTION_BY_DRIVER_DUE_TO_AP_BEACON_CHANGED;
 				pmlmeinfo->wifi_reason_code = WLAN_REASON_UNSPECIFIED;
@@ -1481,7 +1482,7 @@ static void rtw_check_legacy_ap(_adapter *padapter, struct _ADAPTER_LINK *padapt
 		unsigned char *pos;
 		struct rtw_ieee802_11_elems elems;
 #ifdef CONFIG_80211N_HT
-		u16 cur_op_mode; 
+		u16 cur_op_mode;
 #endif
 		/* checking IEs */
 		left = len - sizeof(struct rtw_ieee80211_hdr_3addr) - _BEACON_IE_OFFSET_;
@@ -1502,7 +1503,7 @@ static void rtw_check_legacy_ap(_adapter *padapter, struct _ADAPTER_LINK *padapt
 			ATOMIC_SET(&pmlmepriv->olbc, _TRUE);
 			ATOMIC_SET(&pmlmepriv->olbc_ht, _TRUE);
 		}
-			
+
 	}
 }
 
@@ -1645,6 +1646,10 @@ static u8 auth_null_update_cur_network(struct _ADAPTER_LINK *alink, union recv_f
 		rtw_update_adapter_network(&(pmlmepriv->dev_cur_network.network), bss, adapter, _TRUE);
 		rtw_update_network(&(alink->mlmepriv.cur_network.network), bss, adapter, _TRUE);
 
+#ifdef CONFIG_BCN_CNT_CONFIRM_HDL
+		alink->mlmepriv.new_beacon_cnts = 0;
+#endif
+
 		ret = _SUCCESS;
 	}
 
@@ -1700,7 +1705,7 @@ unsigned int OnBeacon(_adapter *padapter, union recv_frame *precv_frame)
 			if (!rtw_check_bcn_info(padapter, padapter_link, pframe, len))
 			{
 				RTW_PRINT(FUNC_ADPT_FMT" ap has changed, disconnect now\n", FUNC_ADPT_ARG(padapter));
-				receive_disconnect(padapter, lmlmeinfo->network.MacAddress , 0, _FALSE);
+				receive_disconnect(padapter, lmlmeinfo->network.MacAddress , 0, _TRUE);
 				pmlmeinfo->disconnect_occurred_time = rtw_systime_to_ms(rtw_get_current_time());
 				pmlmeinfo->disconnect_code = DISCONNECTION_BY_DRIVER_DUE_TO_AP_BEACON_CHANGED;
 				pmlmeinfo->wifi_reason_code = WLAN_REASON_UNSPECIFIED;
@@ -1765,7 +1770,7 @@ end_auth_null:
 #endif
 				if (!ret) {
 					RTW_PRINT(FUNC_ADPT_FMT" ap has changed, disconnect now\n", FUNC_ADPT_ARG(padapter));
-					receive_disconnect(padapter, lmlmeinfo->network.MacAddress , 0, _FALSE);
+					receive_disconnect(padapter, lmlmeinfo->network.MacAddress , 0, _TRUE);
 					pmlmeinfo->disconnect_occurred_time = rtw_systime_to_ms(rtw_get_current_time());
 					pmlmeinfo->disconnect_code = DISCONNECTION_BY_DRIVER_DUE_TO_AP_BEACON_CHANGED;
 					pmlmeinfo->wifi_reason_code = WLAN_REASON_UNSPECIFIED;
@@ -1896,8 +1901,8 @@ static u32 rtw_get_sta_num_by_state(_adapter *padapter, u32 state)
 	struct sta_info *psta = NULL;
 	struct sta_priv *pstapriv = &(padapter->stapriv);
 
-	_rtw_spinlock_bh(&pstapriv->sta_hash_lock);	
-	for (index = 0; index < NUM_STA; index++) {		
+	_rtw_spinlock_bh(&pstapriv->sta_hash_lock);
+	for (index = 0; index < NUM_STA; index++) {
 		phead = &(pstapriv->sta_hash[index]);
 		plist = get_next(phead);
 		while ((rtw_end_of_queue_search(phead, plist)) == _FALSE) {
@@ -1930,7 +1935,7 @@ static u8  rtw_defs_attack_chk(_adapter *padapter)
 
 	ptime = stime;
 	/* RTW_INFO("%s : current linking num=%u\n", __func__, sta_limit); */
-	return is_reject;	
+	return is_reject;
 }
 
 unsigned int OnAuth(_adapter *padapter, union recv_frame *precv_frame)
@@ -2005,7 +2010,7 @@ unsigned int OnAuth(_adapter *padapter, union recv_frame *precv_frame)
 	RTW_INFO("auth alg=%x, seq=%X\n", algorithm, seq);
 
 	if (rtw_check_invalid_mac_address(sa, _FALSE)){
-		RTW_INFO("%s : reject invalid AUTH-req "MAC_FMT"\n", 
+		RTW_INFO("%s : reject invalid AUTH-req "MAC_FMT"\n",
 			__func__, MAC_ARG(get_addr2_ptr(pframe)));
 		return _FAIL;
 	}
@@ -2297,6 +2302,10 @@ unsigned int OnAuthClient(_adapter *padapter, union recv_frame *precv_frame)
 				offset = (GetPrivacy(pframe)) ? 4 : 0;
 				pmlmeinfo->auth_status = le16_to_cpu(*(unsigned short *)((SIZE_PTR)pframe + \
 					WLAN_HDR_A3_LEN + offset + 4));
+				if (pmlmeinfo->auth_status == WLAN_STATUS_ASSOC_REJECTED_TEMPORARILY) {
+					pmlmeinfo->auth_status = WLAN_STATUS_AUTH_TIMEOUT;
+					RTW_INFO("%s SAE WKRD auth reject, change status code: %d\n", __func__, pmlmeinfo->auth_status);
+				}
 				set_link_timer(pmlmeext, 1);
 				goto authclnt_fail;
 			}
@@ -2468,7 +2477,7 @@ unsigned int OnAssocReq(_adapter *padapter, union recv_frame *precv_frame)
 		return _FAIL;
 
 	if (rtw_check_invalid_mac_address(get_addr2_ptr(pframe), _FALSE)) {
-		RTW_INFO("%s : reject invalid ASSOC-req "MAC_FMT"\n", 
+		RTW_INFO("%s : reject invalid ASSOC-req "MAC_FMT"\n",
 			__func__, MAC_ARG(get_addr2_ptr(pframe)));
 		return _FAIL;
 	}
@@ -3019,6 +3028,11 @@ unsigned int OnAssocRsp(_adapter *padapter, union recv_frame *precv_frame)
 	status = le16_to_cpu(*(unsigned short *)(pframe + WLAN_HDR_A3_LEN + 2));
 	if (status > 0) {
 		RTW_INFO("assoc reject, status code: %d\n", status);
+		if (rtw_sec_chk_auth_type(padapter, MLME_AUTHTYPE_SAE) &&
+			(status == WLAN_STATUS_ASSOC_REJECTED_TEMPORARILY)) {
+			status = WLAN_STATUS_AUTH_TIMEOUT;
+			RTW_INFO("%s SAE WKRD assoc reject, change status code: %d\n", __func__, status);
+		}
 		pmlmeinfo->state = WIFI_FW_NULL_STATE;
 		res = -4;
 		goto report_assoc_result;
@@ -3353,7 +3367,7 @@ unsigned int on_action_wnm(_adapter *adapter, union recv_frame *rframe)
 	u8 *frame = rframe->u.hdr.rx_data;
 	u32 frame_len = rframe->u.hdr.len;
 	u8 *frame_body = (u8 *)(frame + sizeof(struct rtw_ieee80211_hdr_3addr));
-	u32 frame_body_len = frame_len - sizeof(struct rtw_ieee80211_hdr_3addr);	
+	u32 frame_body_len = frame_len - sizeof(struct rtw_ieee80211_hdr_3addr);
 	u8 category, action;
 	int cnt = 0;
 	char msg[16];
@@ -3377,7 +3391,7 @@ unsigned int on_action_wnm(_adapter *adapter, union recv_frame *rframe)
 		}
 		ret = _SUCCESS;
 		break;
-#endif		
+#endif
 	case RTW_WLAN_ACTION_WNM_BTM_RSP:
 		if ((check_fwstate(pmlmepriv, WIFI_AP_STATE) == _TRUE) &&
 			(pmlmepriv->nb_info.features & RTW_WNM_FEATURE_BTM_REQ_EN)) {
@@ -3793,10 +3807,12 @@ unsigned int OnAction_back(_adapter *padapter, union recv_frame *precv_frame)
 	unsigned short	tid, status, reason_code = 0;
 	struct mlme_ext_priv	*pmlmeext = &padapter->mlmeextpriv;
 	struct mlme_ext_info	*pmlmeinfo = &(pmlmeext->mlmext_info);
+	struct xmit_priv	*pxmitpriv = &padapter->xmitpriv;
 	struct registry_priv *pregpriv = &padapter->registrypriv;
 	u8 *pframe = precv_frame->u.hdr.rx_data;
 	struct sta_priv *pstapriv = &padapter->stapriv;
 	struct _ADAPTER_LINK *padapter_link = NULL;
+	int i;
 
 #ifdef CONFIG_80211N_HT
 
@@ -3885,6 +3901,15 @@ unsigned int OnAction_back(_adapter *padapter, union recv_frame *precv_frame)
 				}
 				asoc_cap->num_ampdu = asoc_cap->num_ampdu > buf_num ?
 					buf_num : asoc_cap->num_ampdu;
+
+				if (pxmitpriv->max_agg_time != 0) {
+					for (i=0; i < 4; i++) {
+						asoc_cap->edca[i].param =
+							(asoc_cap->edca[i].param & 0xFFFF) |
+								(pxmitpriv->max_agg_time << 16);
+						RTW_DBG("edca[%d]: 0x%x\n", i, asoc_cap->edca[i].param);
+					}
+				}
 
 				psts = rtw_phl_cmd_cfg_ampdu(GET_PHL_INFO(adapter_to_dvobj(padapter)),
 						padapter->phl_role, psta->phl_sta, PHL_CMD_DIRECTLY, 0);
@@ -4540,7 +4565,7 @@ unsigned int OnAction_ft(_adapter *padapter, union recv_frame *precv_frame)
 		_cancel_timer_ex(&pmlmeext->ft_link_timer);
 
 		/*Disconnect current AP*/
-		receive_disconnect(padapter, lmlmepriv->cur_network.network.MacAddress, WLAN_REASON_ACTIVE_ROAM, _FALSE);
+		receive_disconnect(padapter, lmlmepriv->cur_network.network.MacAddress, WLAN_REASON_ACTIVE_ROAM, _TRUE);
 		pmlmeinfo->disconnect_occurred_time = rtw_systime_to_ms(rtw_get_current_time());
 		pmlmeinfo->disconnect_code = DISCONNECTION_BY_DRIVER_DUE_TO_FT;
 		pmlmeinfo->wifi_reason_code = WLAN_REASON_UNSPECIFIED;
@@ -4842,7 +4867,7 @@ exit:
 void rtw_issue_action_token_rel(_adapter *padapter)
 {
 
-	// Todo: 
+	// Todo:
 	// gen token
 	/* Token Release Format
 		Category code : 	1 Byte
@@ -5697,7 +5722,7 @@ _issue_bcn:
 	pattrib->last_txcmdsz = pattrib->pktlen;
 
 	/* RTW_INFO("issue bcn_sz=%d\n", pattrib->last_txcmdsz); */
-	
+
 #ifdef RTW_PHL_BCN
 	rtw_core_issue_beacon(padapter, pmgntframe);
 
@@ -8045,7 +8070,8 @@ static int issue_action_ba(_adapter *padapter, unsigned char *raddr,
 			pframe = rtw_set_fixed_ie(pframe, 1, &(pmlmeinfo->dialogToken), &(pattrib->pktlen));
 
 #ifdef CONFIG_80211AX_HE
-			if (is_supported_he(psta->phl_sta->wmode))
+			/* Logo sniffer checks that ampdu length must be <= 64 */
+			if (is_supported_he(psta->phl_sta->wmode) && !padapter->registrypriv.wifi_spec)
 				num_ampdu = MAX_BA_BUFFER_SIZE_HE;
 			else
 #endif
@@ -8787,9 +8813,9 @@ int issue_action_find_remote(_adapter *padapter)
 	pframe = rtw_set_fixed_ie(pframe, 3, reserved_2, &(pattrib->pktlen));
 
 	pattrib->last_txcmdsz = pattrib->pktlen;
-	
+
 	dump_mgntframe(padapter, pmgntframe);
-	
+
 	ret = _SUCCESS;
 
 exit:
@@ -8925,7 +8951,7 @@ unsigned int send_beacon(_adapter *padapter)
 #endif
 
 /* CONFIG_PCI_BCN_POLLING is for pci interface beacon polling mode */
-#if defined(CONFIG_USB_HCI) || defined(CONFIG_SDIO_HCI) || defined(CONFIG_GSPI_HCI)|| defined(CONFIG_PCI_BCN_POLLING) 
+#if defined(CONFIG_USB_HCI) || defined(CONFIG_SDIO_HCI) || defined(CONFIG_GSPI_HCI)|| defined(CONFIG_PCI_BCN_POLLING)
 	u8 bxmitok = _FALSE;
 	int issue = 0;
 	int poll = 0;
@@ -8938,14 +8964,14 @@ unsigned int send_beacon(_adapter *padapter)
 	rtw_hal_set_hwreg(padapter, HW_VAR_BCN_VALID, NULL);
 	rtw_hal_set_hwreg(padapter, HW_VAR_DL_BCN_SEL, NULL);
 	do {
-		#if defined(CONFIG_PCI_BCN_POLLING) 
+		#if defined(CONFIG_PCI_BCN_POLLING)
 		issue_beacon(padapter, 0);
 		#else
 		issue_beacon(padapter, 100);
 		#endif
 		issue++;
 		do {
-			#if defined(CONFIG_PCI_BCN_POLLING) 
+			#if defined(CONFIG_PCI_BCN_POLLING)
 			rtw_msleep_os(1);
 			#else
 			rtw_yield_os();
@@ -8953,7 +8979,7 @@ unsigned int send_beacon(_adapter *padapter)
 			rtw_hal_get_hwreg(padapter, HW_VAR_BCN_VALID, (u8 *)(&bxmitok));
 			poll++;
 		} while ((poll % 10) != 0 && _FALSE == bxmitok && !RTW_CANNOT_RUN(adapter_to_dvobj(padapter)));
-		#if defined(CONFIG_PCI_BCN_POLLING) 
+		#if defined(CONFIG_PCI_BCN_POLLING)
 		rtw_hal_unmap_beacon_icf(padapter);
 		#endif
 	} while (bxmitok == _FALSE && (issue < 100) && !RTW_CANNOT_RUN(adapter_to_dvobj(padapter)));
@@ -9559,6 +9585,7 @@ void start_clnt_auth(_adapter *padapter)
 		}
 
 		RTW_PRINT("SAE: start external auth\n");
+		set_link_timer(pmlmeext, SAE_AUTH_TIMEOUT);
 		rtw_cfg80211_external_auth_request(padapter, NULL);
 		return;
 	}
@@ -10921,7 +10948,7 @@ bypass_active_keep_alive:
 				FUNC_ADPT_ARG(padapter));
 			receive_disconnect(padapter,
 				lmlmeinfo->network.MacAddress,
-				WLAN_REASON_EXPIRATION_CHK, _FALSE);
+				WLAN_REASON_EXPIRATION_CHK, _TRUE);
 			pmlmeinfo->disconnect_occurred_time = rtw_systime_to_ms(rtw_get_current_time());
 			pmlmeinfo->disconnect_code = DISCONNECTION_BY_DRIVER_DUE_TO_KEEPALIVE_TIMEOUT;
 			pmlmeinfo->wifi_reason_code = WLAN_REASON_UNSPECIFIED;
@@ -11063,7 +11090,7 @@ void linked_status_chk(_adapter *padapter, u8 *if_sta_chk_rx_bmp, u8 *if_sta_chk
 			rtw_list_delete(&psta->list);
 			RTW_INFO(FUNC_ADPT_FMT" ibss expire "MAC_FMT"\n"
 				, FUNC_ADPT_ARG(padapter), MAC_ARG(psta->phl_sta->mac_addr));
-			report_del_sta_event(padapter, psta->phl_sta->mac_addr, WLAN_REASON_EXPIRATION_CHK, _FALSE, _FALSE);
+			report_del_sta_event(padapter, psta->phl_sta->mac_addr, WLAN_REASON_EXPIRATION_CHK, _FALSE, _TRUE);
 		}
 	}
 
@@ -11106,7 +11133,7 @@ void rtw_tbtx_token_dispatch_timer_hdl(void *ctx)
 		goto exit;
 
 	// dispatch token
-	
+
 	nr_send = RTW_DIV_ROUND_UP(pstapriv->tbtx_asoc_list_cnt, NR_TBTX_SLOT);
 
 	phead = &pstapriv->asoc_list;
@@ -11127,7 +11154,7 @@ void rtw_tbtx_token_dispatch_timer_hdl(void *ctx)
 		plist = get_next(plist);
 	}
 outof_loop:
-	
+
 	RTW_DBG("rtw_tbtx_token_dispatch_timer_hdl()   th_idx=%d,  nr_send=%d, phead=%p, plist=%p, found=%d\n ", th_idx ,  nr_send, phead, plist, found);
 	if (!found) {
 		plist = get_next(phead);
@@ -11158,12 +11185,12 @@ outof_loop:
 		}
 	}
 	ATOMIC_SET(&pstapriv->nr_token_keeper, nr_send);
-	
+
 
 exit:
 	// set_timer
 	rtw_stapriv_asoc_list_unlock(pstapriv);
-	_set_timer(&pmlmeext->tbtx_token_dispatch_timer, TBTX_TX_DURATION); 
+	_set_timer(&pmlmeext->tbtx_token_dispatch_timer, TBTX_TX_DURATION);
 }
 #endif /* CONFIG_AP_MODE */
 #endif /* CONFIG_RTW_TOKEN_BASED_XMIT */
@@ -11200,9 +11227,12 @@ void link_timer_hdl(void *ctx)
 
 #ifdef CONFIG_IOCTL_CFG80211
 		if (rtw_sec_chk_auth_type(padapter, MLME_AUTHTYPE_SAE)) {
+			RTW_INFO("link_timer_hdl: SAE auth timeout.\n");
 			if (pmlmeinfo->auth_status) {
 				report_join_res(padapter, -1, pmlmeinfo->auth_status);
 				pmlmeinfo->auth_status = 0; /* reset */
+			} else {
+				report_join_res(padapter, -1, WLAN_STATUS_AUTH_TIMEOUT);
 			}
 			return;
 		}
@@ -11356,7 +11386,7 @@ void clnt_sa_query_timeout(_adapter *padapter)
 	struct mlme_ext_info *mlmeinfo = &(mlmeext->mlmext_info);
 
 	RTW_INFO(FUNC_ADPT_FMT"\n", FUNC_ADPT_ARG(padapter));
-	receive_disconnect(padapter, get_my_bssid(&(mlmeinfo->dev_network)), WLAN_REASON_SA_QUERY_TIMEOUT, _FALSE);
+	receive_disconnect(padapter, get_my_bssid(&(mlmeinfo->dev_network)), WLAN_REASON_SA_QUERY_TIMEOUT, _TRUE);
 
 	mlmeinfo->disconnect_occurred_time = rtw_systime_to_ms(rtw_get_current_time());
 	mlmeinfo->disconnect_code = DISCONNECTION_BY_DRIVER_DUE_TO_SA_QUERY_TIMEOUT;
@@ -11384,7 +11414,7 @@ void find_remote_timer_hdl(void *ctx)
 {
 	_adapter *padapter = (_adapter *)ctx;
 	struct mlme_ext_priv	*pmlmeext = &(padapter->mlmeextpriv);
-	
+
 	rtw_find_remote_wk_cmd(padapter);
 	set_find_remote_timer(pmlmeext, 1);
 }
@@ -13514,9 +13544,10 @@ int rtw_sae_preprocess(_adapter *adapter, const u8 *buf, u32 len, u8 tx)
 	 * SAE authentication uses direct hashing,
 	 * instead of looping, to obtain the PWE.
 	 * 0x4c(76) : ANTI_CLOGGING_TOKEN_REQ
+	 * 0x4d(77) : FINITE_CYCLIC_GROUP_NOT_SUPPORTED
 	 * WPAS needs to resend AUTH req. with the token,
 	 * driver must pass 0x4c to WPAS to handle it. */
-	if (status == 0 || status == 0x7e || status == 0x4c)
+	if (status == 0 || status == 0x7e || status == 0x4c || status == 0x4d)
 		return _SUCCESS;
 exit:
 	return ret;

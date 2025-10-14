@@ -158,7 +158,11 @@ void init_hal_spec_8852b(struct rtw_phl_com_t *phl_com,
 
 	hal_com->dev_hw_cap.sec_cap.hw_form_hdr = false;
 	hal_com->dev_hw_cap.sec_cap.hw_tx_search_key = false;
+#ifdef CONFIG_PHL_APF
+	hal_com->dev_hw_cap.sec_cap.hw_sec_iv = true;
+#else
 	hal_com->dev_hw_cap.sec_cap.hw_sec_iv = false;
+#endif
 
 #ifdef CONFIG_MCC_SUPPORT
 	hal_com->dev_hw_cap.mcc_sup = true;
@@ -169,12 +173,20 @@ void init_hal_spec_8852b(struct rtw_phl_com_t *phl_com,
 		hal_com->dev_hw_cap.nan_sup = true;
 #endif /* CONFIG_PHL_NAN */
 
+#ifdef CONFIG_RTL8852BP
 	hal_com->dev_hw_cap.ps_cap.ips_cap = PS_CAP_PWR_OFF |
-		PS_CAP_PWRON | PS_CAP_RF_OFF | PS_CAP_CLK_GATED | PS_CAP_PWR_GATED;
-	hal_com->dev_hw_cap.ps_cap.ips_wow_cap =
+		PS_CAP_PWRON | PS_CAP_RF_OFF | PS_CAP_CLK_GATED;
+	hal_com->dev_hw_cap.ps_cap.lps_cap =
+		PS_CAP_PWRON | PS_CAP_RF_OFF | PS_CAP_CLK_GATED;
+#else
+	hal_com->dev_hw_cap.ps_cap.ips_cap = PS_CAP_PWR_OFF |
 		PS_CAP_PWRON | PS_CAP_RF_OFF | PS_CAP_CLK_GATED | PS_CAP_PWR_GATED;
 	hal_com->dev_hw_cap.ps_cap.lps_cap =
 		PS_CAP_PWRON | PS_CAP_RF_OFF | PS_CAP_CLK_GATED | PS_CAP_PWR_GATED;
+#endif
+	hal_com->dev_hw_cap.ps_cap.ips_wow_cap =
+		PS_CAP_PWRON | PS_CAP_RF_OFF | PS_CAP_CLK_GATED | PS_CAP_PWR_GATED;
+
 	hal_com->dev_hw_cap.ps_cap.lps_wow_cap =
 		PS_CAP_PWRON | PS_CAP_RF_OFF | PS_CAP_CLK_GATED | PS_CAP_PWR_GATED;
 	hal_com->dev_hw_cap.ps_cap.bcn_tracking = false;

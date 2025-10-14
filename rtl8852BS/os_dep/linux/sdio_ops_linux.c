@@ -15,6 +15,7 @@
 #define _SDIO_OPS_LINUX_C_
 
 #include <drv_types.h>
+#include <rtw_io_records.h>
 
 static bool rtw_sdio_claim_host_needed(struct sdio_func *func)
 {
@@ -26,23 +27,7 @@ static bool rtw_sdio_claim_host_needed(struct sdio_func *func)
 	return _TRUE;
 }
 
-#ifdef CONFIG_RTW_SDIO_RECORDS
-
-#define DBG_SDIO_RECORD_DATA_LEN 4 /* record 4-byte at most by default */
-
-#ifndef DBG_SDIO_RECORD_TASK_INFO
-#define DBG_SDIO_RECORD_TASK_INFO 1
-#endif
-
-#ifndef DBG_SDIO_RECORDS_NUM
-#define DBG_SDIO_RECORDS_NUM CONFIG_RTW_SDIO_RECORDS_NUM
-#endif
-#ifndef DBG_SDIO_RECORDS_ENABLE
-#define DBG_SDIO_RECORDS_ENABLE CONFIG_RTW_SDIO_RECORDS_ENABLE
-#endif
-#ifndef DBG_SDIO_RECORDS_LOOP
-#define DBG_SDIO_RECORDS_LOOP CONFIG_RTW_SDIO_RECORDS_LOOP
-#endif
+#ifdef CONFIG_RTW_IO_RECORDS
 
 enum sdio_type {
 	SDIO_CMDT_F0_52_READ,
@@ -63,140 +48,6 @@ static const char *sdio_type_str[] = {
 	[SDIO_CMDT_53_WRITE]	= "53W",
 };
 
-struct sdio_record {
-	bool valid;
-	sysptime stime;
-	sysptime etime;
-	u8 type; /* enum sdio_type */
-	u32 addr;
-	u32 cnt;
-	int err;
-#if DBG_SDIO_RECORD_DATA_LEN
-	u8 data[DBG_SDIO_RECORD_DATA_LEN];
-#endif
-#if DBG_SDIO_RECORD_TASK_INFO
-	char task_comm[TASK_COMM_LEN];
-	unsigned int cpu;
-#endif
-};
-
-struct sdio_records {
-#if CONFIG_RTW_SDIO_RECORDS_STATIC
-	struct sdio_record record[DBG_SDIO_RECORDS_NUM];
-#else
-	struct sdio_record *record;
-#endif
-
-	size_t record_num;
-	size_t pos;
-	bool enable;
-	bool loop;
-};
-
-static struct sdio_records dbg_sdio_records = {
-#if CONFIG_RTW_SDIO_RECORDS_STATIC
-	.record_num = DBG_SDIO_RECORDS_NUM,
-	.enable = DBG_SDIO_RECORDS_ENABLE,
-	.loop = DBG_SDIO_RECORDS_LOOP,
-#endif
-};
-
-#define __dbg_sdio_record_warn(_r) do {} while (0)
-
-#if DBG_SDIO_RECORD_DATA_LEN
-#define __dbg_sdio_record_fill_data_1(_r, _data) (_r)->data[0] = *((u8 *)_data)
-#define __dbg_sdio_record_fill_data_n(_r, _cnt, _data) _rtw_memcpy((_r)->data, _data, rtw_min(_cnt, DBG_SDIO_RECORD_DATA_LEN))
-#define __dbg_sdio_record_fill_data_w(_r, _w) *((u16 *)(_r)->data) = cpu_to_le16(_w)
-#define __dbg_sdio_record_fill_data_dw(_r, _dw) *((u32 *)(_r)->data) = cpu_to_le32(_dw)
-#else
-#define __dbg_sdio_record_fill_data_1(_r, _data) do {} while (0)
-#define __dbg_sdio_record_fill_data_n(_r, _cnt, _data) do {} while (0)
-#define __dbg_sdio_record_fill_data_w(_r, _w) do {} while (0)
-#define __dbg_sdio_record_fill_data_dw(_r, _l) do {} while (0)
-#endif
-
-#if DBG_SDIO_RECORD_TASK_INFO
-#define __dbg_sdio_record_fill_task_info(_r) \
-	do { \
-		_rtw_memcpy((_r)->task_comm, current->comm, TASK_COMM_LEN); \
-		(_r)->cpu = smp_processor_id(); \
-	} while (0)
-#else
-#define __dbg_sdio_record_fill_task_info(_r) do {} while (0)
-#endif
-
-#define DECLARE_DBG_SDIO_RECORD_P(_r) struct sdio_record *_r
-
-#define dbg_sdio_record_get_and_advance(_r) \
-	do { \
-		if (dbg_sdio_records.enable) { \
-			if (dbg_sdio_records.loop || !dbg_sdio_records.record[dbg_sdio_records.pos].valid) { \
-				(_r) = &dbg_sdio_records.record[dbg_sdio_records.pos]; \
-				dbg_sdio_records.pos++; \
-				if (dbg_sdio_records.pos >= dbg_sdio_records.record_num) \
-					dbg_sdio_records.pos = 0; \
-				(_r)->valid = true; \
-				__dbg_sdio_record_fill_task_info(_r); \
-				(_r)->stime = rtw_sptime_get_raw(); \
-			} else { \
-				RTW_INFO("%s record full, disable\n", __func__); \
-				dbg_sdio_records.enable = false; \
-			} \
-		} \
-	} while (0)
-
-#define dbg_sdio_record_fill_1(_r, _type, _addr, _err, _data) \
-	do { \
-		if (dbg_sdio_records.enable) { \
-			(_r)->etime = rtw_sptime_get_raw(); \
-			(_r)->type = _type; \
-			(_r)->addr = _addr; \
-			(_r)->cnt = 1; \
-			(_r)->err = _err; \
-			__dbg_sdio_record_fill_data_1(_r, _data); \
-			__dbg_sdio_record_warn(_r); \
-		} \
-	} while (0)
-
-#define dbg_sdio_record_fill_n(_r, _type, _addr, _cnt, _err, _data) \
-	do { \
-		if (dbg_sdio_records.enable) { \
-			(_r)->etime = rtw_sptime_get_raw(); \
-			(_r)->type = _type; \
-			(_r)->addr = _addr; \
-			(_r)->cnt = _cnt; \
-			(_r)->err = _err; \
-			__dbg_sdio_record_fill_data_n(_r, _cnt, _data); \
-			__dbg_sdio_record_warn(_r); \
-		} \
-	} while (0)
-
-#define dbg_sdio_record_fill_w(_r, _type, _addr, _err, _w) \
-	do { \
-		if (dbg_sdio_records.enable) { \
-			(_r)->etime = rtw_sptime_get_raw(); \
-			(_r)->type = _type; \
-			(_r)->addr = _addr; \
-			(_r)->cnt = 2; \
-			(_r)->err = _err; \
-			__dbg_sdio_record_fill_data_w(_r, _w); \
-			__dbg_sdio_record_warn(_r); \
-		} \
-	} while (0)
-
-#define dbg_sdio_record_fill_dw(_r, _type, _addr, _err, _dw) \
-	do { \
-		if (dbg_sdio_records.enable) { \
-			(_r)->etime = rtw_sptime_get_raw(); \
-			(_r)->type = _type; \
-			(_r)->addr = _addr; \
-			(_r)->cnt = 4; \
-			(_r)->err = _err; \
-			__dbg_sdio_record_fill_data_dw(_r, _dw); \
-			__dbg_sdio_record_warn(_r); \
-		} \
-	} while (0)
-
 #define SDIO_R_TITLE_FMT "%-9s %-17s %-11s %-5s %-7s %-5s %-4s"
 #define SDIO_R_TITLE_TFMT "%s\t%s\t%s\t%s\t%s\t%s\t%s"
 #define SDIO_R_TITLE_ARG , "seq", "stime", "api_time", "type", "addr", "cnt", "err"
@@ -204,12 +55,12 @@ static struct sdio_records dbg_sdio_records = {
 #define SDIO_R_VALUE_TFMT "%zu\t%lld.%09lld\t%lld.%09lld\t%s\t0x%05x\t%u\t%d"
 #define SDIO_R_VALUE_ARG \
 		, seq \
-		, rtw_sptime_to_ns(r->stime) / 1000000000, rtw_sptime_to_ns(r->stime) % 1000000000 \
-		, rtw_sptime_diff_ns(r->stime, r->etime) / 1000000000, rtw_sptime_diff_ns(r->stime, r->etime) % 1000000000 \
+		, rtw_division64(rtw_sptime_to_ns(r->stime), 1000000000), rtw_modular64(rtw_sptime_to_ns(r->stime), 1000000000) \
+		, rtw_division64(rtw_sptime_diff_ns(r->stime, r->etime), 1000000000), rtw_modular64(rtw_sptime_diff_ns(r->stime, r->etime), 1000000000) \
 		, sdio_type_str[r->type] \
 		, r->addr, r->cnt, r->err
 
-#if DBG_SDIO_RECORD_DATA_LEN
+#if DBG_RTW_IO_RECORD_DATA_LEN
 #define SDIO_R_TITLE_FMT_DATA " %-2s %-2s %-2s %-2s"
 #define SDIO_R_TITLE_TFMT_DATA "\t%s\t%s\t%s\t%s"
 #define SDIO_R_TITLE_ARG_DATA , "d0", "d1", "d2", "d3"
@@ -225,13 +76,13 @@ static struct sdio_records dbg_sdio_records = {
 #define SDIO_R_VALUE_ARG_DATA
 #endif
 
-#if DBG_SDIO_RECORD_TASK_INFO
-#define SDIO_R_TITLE_FMT_TASK_INFO " %-15s %-3s"
-#define SDIO_R_TITLE_TFMT_TASK_INFO "\t%s\t%s"
-#define SDIO_R_TITLE_ARG_TASK_INFO , "task_comm", "cpu"
-#define SDIO_R_VALUE_FMT_TASK_INFO " %-15s %-3d"
-#define SDIO_R_VALUE_TFMT_TASK_INFO "\t%s\t%d"
-#define SDIO_R_VALUE_ARG_TASK_INFO , r->task_comm, r->cpu
+#if DBG_RTW_IO_RECORD_TASK_INFO
+#define SDIO_R_TITLE_FMT_TASK_INFO " %-15s"
+#define SDIO_R_TITLE_TFMT_TASK_INFO "\t%s"
+#define SDIO_R_TITLE_ARG_TASK_INFO , "task_comm"
+#define SDIO_R_VALUE_FMT_TASK_INFO " %-15s"
+#define SDIO_R_VALUE_TFMT_TASK_INFO "\t%s"
+#define SDIO_R_VALUE_ARG_TASK_INFO , r->task_comm
 #else
 #define SDIO_R_TITLE_FMT_TASK_INFO ""
 #define SDIO_R_TITLE_TFMT_TASK_INFO ""
@@ -241,43 +92,66 @@ static struct sdio_records dbg_sdio_records = {
 #define SDIO_R_VALUE_ARG_TASK_INFO
 #endif
 
-#define SDIO_R_TITLE_FMT_REL " %-11s %-11s"
-#define SDIO_R_TITLE_TFMT_REL "\t%s\t%s"
-#define SDIO_R_TITLE_ARG_REL , "from_last_io", "from_last_rx_io"
-#define SDIO_R_VALUE_FMT_REL " %2lld.%09lld %5lld.%09lld"
-#define SDIO_R_VALUE_TFMT_REL "\t%lld.%09lld\t%lld.%09lld"
+#if DBG_RTW_IO_RECORD_CPU_INFO
+#define SDIO_R_TITLE_FMT_CPU_INFO " %-3s"
+#define SDIO_R_TITLE_TFMT_CPU_INFO "\t%s"
+#define SDIO_R_TITLE_ARG_CPU_INFO , "cpu"
+#define SDIO_R_VALUE_FMT_CPU_INFO " %-3d"
+#define SDIO_R_VALUE_TFMT_CPU_INFO "\t%d"
+#define SDIO_R_VALUE_ARG_CPU_INFO , r->cpu
+#else
+#define SDIO_R_TITLE_FMT_CPU_INFO ""
+#define SDIO_R_TITLE_TFMT_CPU_INFO ""
+#define SDIO_R_TITLE_ARG_CPU_INFO
+#define SDIO_R_VALUE_FMT_CPU_INFO ""
+#define SDIO_R_VALUE_TFMT_CPU_INFO ""
+#define SDIO_R_VALUE_ARG_CPU_INFO
+#endif
+
+#define SDIO_R_TITLE_FMT_REL " %-12s %-15s %-15s"
+#define SDIO_R_TITLE_TFMT_REL "\t%s\t%s\t%s"
+#define SDIO_R_TITLE_ARG_REL , "from_last_io", "from_last_rx_io", "from_last_tx_io"
+#define SDIO_R_VALUE_FMT_REL " %2lld.%09lld %5lld.%09lld %5lld.%09lld"
+#define SDIO_R_VALUE_TFMT_REL "\t%lld.%09lld\t%lld.%09lld\t%lld.%09lld"
 #define SDIO_R_VALUE_ARG_REL \
-		, last_io ? rtw_sptime_diff_ns(last_io->etime, r->stime) / 1000000000 : 0 \
-		, last_io ? rtw_sptime_diff_ns(last_io->etime, r->stime) % 1000000000 : 0 \
-		, last_rx_io ? rtw_sptime_diff_ns(last_rx_io->etime, r->stime) / 1000000000 : 0 \
-		, last_rx_io ? rtw_sptime_diff_ns(last_rx_io->etime, r->stime) % 1000000000 : 0
+		, last_io ? rtw_division64(rtw_sptime_diff_ns(last_io->etime, r->stime), 1000000000) : 0 \
+		, last_io ? rtw_modular64(rtw_sptime_diff_ns(last_io->etime, r->stime), 1000000000) : 0 \
+		, last_rx_io ? rtw_division64(rtw_sptime_diff_ns(last_rx_io->etime, r->stime), 1000000000) : 0 \
+		, last_rx_io ? rtw_modular64(rtw_sptime_diff_ns(last_rx_io->etime, r->stime), 1000000000) : 0 \
+		, last_tx_io ? rtw_division64(rtw_sptime_diff_ns(last_tx_io->etime, r->stime), 1000000000) : 0 \
+		, last_tx_io ? rtw_modular64(rtw_sptime_diff_ns(last_tx_io->etime, r->stime), 1000000000) : 0
 
 static void sdio_record_title_dump_tab(void *sel)
 {
 	RTW_PRINT_SEL(sel, SDIO_R_TITLE_TFMT
 		SDIO_R_TITLE_TFMT_DATA
 		SDIO_R_TITLE_TFMT_TASK_INFO
+		SDIO_R_TITLE_TFMT_CPU_INFO
 		SDIO_R_TITLE_TFMT_REL
 		"\n"
 		SDIO_R_TITLE_ARG
 		SDIO_R_TITLE_ARG_DATA
 		SDIO_R_TITLE_ARG_TASK_INFO
+		SDIO_R_TITLE_ARG_CPU_INFO
 		SDIO_R_TITLE_ARG_REL
 		);
 }
 
-static void sdio_record_value_dump_tab(void *sel, struct sdio_record *r, size_t seq
-	, struct sdio_record *last_io
-	, struct sdio_record *last_rx_io)
+static void sdio_record_value_dump_tab(void *sel, struct rtw_io_record *r, size_t seq
+	, struct rtw_io_record *last_io
+	, struct rtw_io_record *last_rx_io
+	, struct rtw_io_record *last_tx_io)
 {
 	RTW_PRINT_SEL(sel, SDIO_R_VALUE_TFMT
 		SDIO_R_VALUE_TFMT_DATA
 		SDIO_R_VALUE_TFMT_TASK_INFO
+		SDIO_R_VALUE_TFMT_CPU_INFO
 		SDIO_R_VALUE_TFMT_REL
 		"\n"
 		SDIO_R_VALUE_ARG
 		SDIO_R_VALUE_ARG_DATA
 		SDIO_R_VALUE_ARG_TASK_INFO
+		SDIO_R_VALUE_ARG_CPU_INFO
 		SDIO_R_VALUE_ARG_REL
 	);
 }
@@ -288,63 +162,73 @@ static void sdio_record_title_dump(void *sel)
 	RTW_PRINT_SEL(sel, SDIO_R_TITLE_FMT
 		SDIO_R_TITLE_FMT_DATA
 		SDIO_R_TITLE_FMT_TASK_INFO
+		SDIO_R_TITLE_FMT_CPU_INFO
 		SDIO_R_TITLE_FMT_REL
 		"\n"
 		SDIO_R_TITLE_ARG
 		SDIO_R_TITLE_ARG_DATA
 		SDIO_R_TITLE_ARG_TASK_INFO
+		SDIO_R_TITLE_ARG_CPU_INFO
 		SDIO_R_TITLE_ARG_REL
 		);
 }
 
-static void sdio_record_value_dump(void *sel, struct sdio_record *r, size_t seq
-	, struct sdio_record *last_io
-	, struct sdio_record *last_rx_io)
+static void sdio_record_value_dump(void *sel, struct rtw_io_record *r, size_t seq
+	, struct rtw_io_record *last_io
+	, struct rtw_io_record *last_rx_io
+	, struct rtw_io_record *last_tx_io)
 {
 	RTW_PRINT_SEL(sel, SDIO_R_VALUE_FMT
 		SDIO_R_VALUE_FMT_DATA
 		SDIO_R_VALUE_FMT_TASK_INFO
+		SDIO_R_VALUE_FMT_CPU_INFO
 		SDIO_R_VALUE_FMT_REL
 		"\n"
 		SDIO_R_VALUE_ARG
 		SDIO_R_VALUE_ARG_DATA
 		SDIO_R_VALUE_ARG_TASK_INFO
+		SDIO_R_VALUE_ARG_CPU_INFO
 		SDIO_R_VALUE_ARG_REL
 	);
 }
 
 typedef void (*sdio_rec_title_dump)(void *);
-typedef void (*sdio_rec_value_dump)(void *, struct sdio_record *, size_t, struct sdio_record *, struct sdio_record *);
+typedef void (*sdio_rec_value_dump)(void *, struct rtw_io_record *, size_t, struct rtw_io_record *, struct rtw_io_record *, struct rtw_io_record *);
 
-static bool rtw_sdio_record_is_rx(struct sdio_record *r)
+static bool rtw_sdio_record_is_himr(struct rtw_io_record *r)
+{
+	/* TODO: judge by HAL */
+	return r->addr == 0x01100;
+}
+
+static bool rtw_sdio_record_is_hisr(struct rtw_io_record *r)
+{
+	/* TODO: judge by HAL */
+	return r->addr == 0x01104;
+}
+
+static bool rtw_sdio_record_is_rx(struct rtw_io_record *r)
 {
 	/* TODO: judge by HAL */
 	return r->addr == 0x01f00;
 }
 
-bool rtw_sdio_records_enabled(void)
+static bool rtw_sdio_record_is_rx_aval(struct rtw_io_record *r)
 {
-	return dbg_sdio_records.enable;
+	/* TODO: judge by HAL */
+	return r->addr == 0x01108;
 }
 
-void rtw_sdio_records_clear(void)
+static bool rtw_sdio_record_is_tx(struct rtw_io_record *r)
 {
-	int i;
-
-	for (i = 0; i < dbg_sdio_records.record_num; i++)
-		dbg_sdio_records.record[i].valid = false;
-	dbg_sdio_records.pos = 0;
+	/* TODO: judge by HAL */
+	return (r->addr & BIT16) && r->cnt > 4;
 }
 
-bool rtw_sdio_record_valid(size_t seq)
+static bool rtw_sdio_record_is_tx_aval(struct rtw_io_record *r)
 {
-	if (seq < dbg_sdio_records.record_num) {
-		size_t oldest_pos = dbg_sdio_records.record[dbg_sdio_records.pos].valid ? dbg_sdio_records.pos : 0;
-		struct sdio_record *record = &dbg_sdio_records.record[(oldest_pos + seq) % dbg_sdio_records.record_num];
-
-		return record->valid;
-	}
-	return false;
+	/* TODO: judge by HAL */
+	return r->addr == 0x01110;
 }
 
 void rtw_sdio_records_dump_title(void *sel, bool tab)
@@ -356,59 +240,309 @@ void rtw_sdio_records_dump_title(void *sel, bool tab)
 
 void rtw_sdio_records_dump_value_by_seq(void *sel, bool tab, size_t seq)
 {
-	size_t oldest_pos = dbg_sdio_records.record[dbg_sdio_records.pos].valid ? dbg_sdio_records.pos : 0;
-	struct sdio_record *record = &dbg_sdio_records.record[(oldest_pos + seq) % dbg_sdio_records.record_num];
+	size_t oldest_pos = dbg_rtw_io_records.record[dbg_rtw_io_records.pos].valid ? dbg_rtw_io_records.pos : 0;
+	struct rtw_io_record *record = &dbg_rtw_io_records.record[(oldest_pos + seq) % dbg_rtw_io_records.record_num];
 
 	if (record->valid) {
 		sdio_rec_value_dump value_dump = tab ? sdio_record_value_dump_tab : sdio_record_value_dump;
 		bool rx_io = rtw_sdio_record_is_rx(record);
-		struct sdio_record *last_io = NULL;
-		struct sdio_record *last_rx_io = NULL;
+		bool tx_io = rtw_sdio_record_is_tx(record);
+		struct rtw_io_record *last_io = NULL;
+		struct rtw_io_record *last_rx_io = NULL;
+		struct rtw_io_record *last_tx_io = NULL;
 
 		if (seq != 0) {
-			last_io = &dbg_sdio_records.record[(oldest_pos + seq - 1) % dbg_sdio_records.record_num];
+			last_io = &dbg_rtw_io_records.record[(oldest_pos + seq - 1) % dbg_rtw_io_records.record_num];
 
-			if (rx_io) {
-				struct sdio_record *r;
+			if (rx_io || tx_io) {
+				struct rtw_io_record *r;
 				size_t i;
 
-				/* find last_rx_io */
+				/* find last_rx_io or last_tx_io */
 				for (i = 1; i <= seq ; i++) {
-					r = &dbg_sdio_records.record[(oldest_pos + seq - i) % dbg_sdio_records.record_num];
-					if (rtw_sdio_record_is_rx(r)) {
+					r = &dbg_rtw_io_records.record[(oldest_pos + seq - i) % dbg_rtw_io_records.record_num];
+					if (rx_io && rtw_sdio_record_is_rx(r)) {
 						last_rx_io = r;
+						break;
+					}
+					if (tx_io && rtw_sdio_record_is_tx(r)) {
+						last_tx_io = r;
 						break;
 					}
 				}
 			}
 		}
-		value_dump(sel, record, seq, last_io, rx_io ? last_rx_io : NULL);
+		value_dump(sel, record, seq, last_io, rx_io ? last_rx_io : NULL, tx_io ? last_tx_io : NULL);
 	}
 }
 
 void rtw_sdio_records_dump(void *sel, bool tab)
 {
-	struct sdio_record *record;
-	struct sdio_record *last_io = NULL;
-	struct sdio_record *last_rx_io = NULL;
+	struct rtw_io_record *record;
+	struct rtw_io_record *last_io = NULL;
+	struct rtw_io_record *last_rx_io = NULL;
+	struct rtw_io_record *last_tx_io = NULL;
 	sdio_rec_title_dump title_dump = tab ? sdio_record_title_dump_tab : sdio_record_title_dump;
 	sdio_rec_value_dump value_dump = tab ? sdio_record_value_dump_tab : sdio_record_value_dump;
-	bool rx_io;
-	size_t oldest_pos = dbg_sdio_records.record[dbg_sdio_records.pos].valid ? dbg_sdio_records.pos : 0;
+	bool rx_io, tx_io;
+	size_t oldest_pos = dbg_rtw_io_records.record[dbg_rtw_io_records.pos].valid ? dbg_rtw_io_records.pos : 0;
 	size_t i;
 
 	title_dump(sel);
 
-	for (i = 0; i < dbg_sdio_records.record_num; i++) {
-		record = &dbg_sdio_records.record[(oldest_pos + i) % dbg_sdio_records.record_num];
+	for (i = 0; i < dbg_rtw_io_records.record_num; i++) {
+		record = &dbg_rtw_io_records.record[(oldest_pos + i) % dbg_rtw_io_records.record_num];
 		if (!record->valid)
 			break;
 		rx_io = rtw_sdio_record_is_rx(record);
-		value_dump(sel, record, i, last_io, rx_io ? last_rx_io : NULL);
+		tx_io = rtw_sdio_record_is_tx(record);
+		value_dump(sel, record, i, last_io, rx_io ? last_rx_io : NULL, tx_io ? last_tx_io : NULL);
 		last_io = record;
 		if (rx_io)
 			last_rx_io = record;
+		if (tx_io)
+			last_tx_io = record;
 	}
+}
+
+struct sdio_records_summary {
+	sysptime stime;
+	sysptime etime;
+
+	size_t io_num;
+	size_t himr_io_num;
+	size_t hisr_io_num;
+	size_t rx_io_num;
+	size_t rx_aval_io_num;
+	size_t tx_io_num;
+	size_t tx_aval_io_num;
+	size_t other_io_num;
+
+	sysptime io_time; /* the total IO time */
+	sysptime himr_io_time;
+	sysptime hisr_io_time;
+	sysptime rx_io_time;
+	sysptime rx_aval_io_time;
+	sysptime tx_io_time;
+	sysptime tx_aval_io_time;
+	sysptime other_io_time;
+
+	sysptime rx_io_int_total;
+	sysptime rx_io_int_min;
+	sysptime rx_io_int_max;
+	sysptime rx_io_int_avg;
+	sysptime tx_io_int_total;
+	sysptime tx_io_int_min;
+	sysptime tx_io_int_max;
+	sysptime tx_io_int_avg;
+
+	u64 rx_io_len_total;
+	u32 rx_io_len_min;
+	u32 rx_io_len_max;
+	u64 rx_io_len_avg;
+	u64 tx_io_len_total;
+	u32 tx_io_len_min;
+	u32 tx_io_len_max;
+	u64 tx_io_len_avg;
+};
+
+void rtw_sdio_records_summary_dump(void *sel)
+{
+	struct sdio_records_summary data;
+	struct rtw_io_record *record;
+	struct rtw_io_record *last_io = NULL;
+	struct rtw_io_record *last_rx_io = NULL;
+	struct rtw_io_record *last_tx_io = NULL;
+	bool himr_io, hisr_io, rx_io, rx_aval_io, tx_io, tx_aval_io;
+	size_t oldest_pos = dbg_rtw_io_records.record[dbg_rtw_io_records.pos].valid ? dbg_rtw_io_records.pos : 0;
+	size_t i;
+
+	_rtw_memset(&data, 0, sizeof(data));
+	data.io_time = rtw_sptime_zero();
+	data.himr_io_time = rtw_sptime_zero();
+	data.hisr_io_time = rtw_sptime_zero();
+	data.rx_io_time = rtw_sptime_zero();
+	data.tx_io_time = rtw_sptime_zero();
+	data.rx_aval_io_time = rtw_sptime_zero();
+	data.tx_aval_io_time = rtw_sptime_zero();
+	data.rx_io_int_total = rtw_sptime_zero();
+	data.tx_io_int_total = rtw_sptime_zero();
+
+	for (i = 0; i < dbg_rtw_io_records.record_num; i++) {
+		record = &dbg_rtw_io_records.record[(oldest_pos + i) % dbg_rtw_io_records.record_num];
+		if (!record->valid)
+			break;
+		himr_io = rtw_sdio_record_is_himr(record);
+		hisr_io = rtw_sdio_record_is_hisr(record);
+		rx_io = rtw_sdio_record_is_rx(record);
+		rx_aval_io = rtw_sdio_record_is_rx_aval(record);
+		tx_io = rtw_sdio_record_is_tx(record);
+		tx_aval_io = rtw_sdio_record_is_tx_aval(record);
+
+		if (i == 0)
+			data.stime = record->stime;
+		data.etime = record->etime;
+
+		data.io_num++;
+		data.io_time = rtw_sptime_add(data.io_time, rtw_sptime_sub(record->etime, record->stime));
+		last_io = record;
+		if (himr_io) {
+			data.himr_io_num++;
+			data.himr_io_time = rtw_sptime_add(data.himr_io_time, rtw_sptime_sub(record->etime, record->stime));
+		}
+		if (hisr_io) {
+			data.hisr_io_num++;
+			data.hisr_io_time = rtw_sptime_add(data.hisr_io_time, rtw_sptime_sub(record->etime, record->stime));
+		}
+		if (rx_io) {
+			data.rx_io_len_total += record->cnt;
+			if (data.rx_io_num == 0 || data.rx_io_len_min > record->cnt)
+				data.rx_io_len_min = record->cnt;
+			if (data.rx_io_num == 0 || data.rx_io_len_max < record->cnt)
+				data.rx_io_len_max = record->cnt;
+			data.rx_io_time = rtw_sptime_add(data.rx_io_time, rtw_sptime_sub(record->etime, record->stime));
+			if (last_rx_io) {
+				data.rx_io_int_total = rtw_sptime_add(data.rx_io_int_total, rtw_sptime_sub(record->stime, last_rx_io->etime));
+				if (data.rx_io_num == 1 || rtw_sptime_after(data.rx_io_int_min, rtw_sptime_sub(record->stime, last_rx_io->etime)))
+					data.rx_io_int_min = rtw_sptime_sub(record->stime, last_rx_io->etime);
+				if (data.rx_io_num == 1 || rtw_sptime_before(data.rx_io_int_max, rtw_sptime_sub(record->stime, last_rx_io->etime)))
+					data.rx_io_int_max = rtw_sptime_sub(record->stime, last_rx_io->etime);
+			}
+			data.rx_io_num++;
+			last_rx_io = record;
+		}
+		if (rx_aval_io) {
+			data.rx_aval_io_time = rtw_sptime_add(data.rx_aval_io_time, rtw_sptime_sub(record->etime, record->stime));
+			data.rx_aval_io_num++;
+		}
+		if (tx_io) {
+			data.tx_io_len_total += record->cnt;
+			if (data.tx_io_num == 0 || data.tx_io_len_min > record->cnt)
+				data.tx_io_len_min = record->cnt;
+			if (data.tx_io_num == 0 || data.tx_io_len_max < record->cnt)
+				data.tx_io_len_max = record->cnt;
+			data.tx_io_time = rtw_sptime_add(data.tx_io_time, rtw_sptime_sub(record->etime, record->stime));
+			if (last_tx_io) {
+				data.tx_io_int_total = rtw_sptime_add(data.tx_io_int_total, rtw_sptime_sub(record->stime, last_tx_io->etime));
+				if (data.tx_io_num == 1 || rtw_sptime_after(data.tx_io_int_min, rtw_sptime_sub(record->stime, last_tx_io->etime)))
+					data.tx_io_int_min = rtw_sptime_sub(record->stime, last_tx_io->etime);
+				if (data.tx_io_num == 1 || rtw_sptime_before(data.tx_io_int_max, rtw_sptime_sub(record->stime, last_tx_io->etime)))
+					data.tx_io_int_max = rtw_sptime_sub(record->stime, last_tx_io->etime);
+			}
+			data.tx_io_num++;
+			last_tx_io = record;
+		}
+		if (tx_aval_io) {
+			data.tx_aval_io_time = rtw_sptime_add(data.tx_aval_io_time, rtw_sptime_sub(record->etime, record->stime));
+			data.tx_aval_io_num++;
+		}
+	}
+
+	data.other_io_num = data.io_num;
+	data.other_io_num = data.other_io_num - data.himr_io_num;
+	data.other_io_num = data.other_io_num - data.hisr_io_num;
+	data.other_io_num = data.other_io_num - data.rx_io_num;
+	data.other_io_num = data.other_io_num - data.tx_io_num;
+	data.other_io_num = data.other_io_num - data.rx_aval_io_num;
+	data.other_io_num = data.other_io_num - data.tx_aval_io_num;
+
+	data.other_io_time = data.io_time;
+	data.other_io_time = rtw_sptime_sub(data.other_io_time, data.himr_io_time);
+	data.other_io_time = rtw_sptime_sub(data.other_io_time, data.hisr_io_time);
+	data.other_io_time = rtw_sptime_sub(data.other_io_time, data.rx_io_time);
+	data.other_io_time = rtw_sptime_sub(data.other_io_time, data.tx_io_time);
+	data.other_io_time = rtw_sptime_sub(data.other_io_time, data.rx_aval_io_time);
+	data.other_io_time = rtw_sptime_sub(data.other_io_time, data.tx_aval_io_time);
+
+	data.rx_io_int_avg = data.rx_io_num ? rtw_ns_to_sptime(rtw_division64(rtw_sptime_to_ns(data.rx_io_int_total), (data.rx_io_num - 1))) : rtw_sptime_zero();
+	data.tx_io_int_avg = data.tx_io_num ? rtw_ns_to_sptime(rtw_division64(rtw_sptime_to_ns(data.tx_io_int_total), (data.tx_io_num - 1))) : rtw_sptime_zero();
+
+	data.rx_io_len_avg = rtw_division64(data.rx_io_len_total * 1000, rtw_sptime_diff_ms(data.stime, data.etime));
+	data.tx_io_len_avg = rtw_division64(data.tx_io_len_total * 1000, rtw_sptime_diff_ms(data.stime, data.etime));
+
+#define SEC_FMT "%lld.%09lld"
+#define SEC_ARG(ns) rtw_division64(ns, 1000000000), rtw_modular64(ns, 1000000000)
+#define PCT2_FMT "%2u.%02u%%"
+#define PCT2_ARG(n, d) (u8)rtw_division64((n) * 100, d), (u8)rtw_modular64(rtw_division64((n) * 10000, d), 100)
+
+	RTW_PRINT_SEL(sel,
+		"         io_num: %zu\n"
+		"    himr_io_num: %zu\n"
+		"    hisr_io_num: %zu\n"
+		"      rx_io_num: %zu\n"
+		"      tx_io_num: %zu\n"
+		" rx_aval_io_num: %zu\n"
+		" tx_aval_io_num: %zu\n"
+		"   other_io_num: %zu\n"
+		"           time: "SEC_FMT"\n"
+		"        io_time: "SEC_FMT"\n"
+		"   himr_io_time: "SEC_FMT" ("PCT2_FMT")\n"
+		"   hisr_io_time: "SEC_FMT" ("PCT2_FMT")\n"
+		"     rx_io_time: "SEC_FMT" ("PCT2_FMT")\n"
+		"     tx_io_time: "SEC_FMT" ("PCT2_FMT")\n"
+		"rx_aval_io_time: "SEC_FMT" ("PCT2_FMT")\n"
+		"tx_aval_io_time: "SEC_FMT" ("PCT2_FMT")\n"
+		"  other_io_time: "SEC_FMT" ("PCT2_FMT")\n"
+		"rx_io_int total: "SEC_FMT"\n"
+		"            min: "SEC_FMT"\n"
+		"            max: "SEC_FMT"\n"
+		"            avg: "SEC_FMT"\n"
+		"tx_io_int total: "SEC_FMT"\n"
+		"            min: "SEC_FMT"\n"
+		"            max: "SEC_FMT"\n"
+		"            avg: "SEC_FMT"\n"
+		"rx_io_len total: %llu\n"
+		"            min: %u\n"
+		"            max: %u\n"
+		"            avg: %llu\n"
+		"tx_io_len total: %llu\n"
+		"            min: %u\n"
+		"            max: %u\n"
+		"            avg: %llu\n"
+		"          rx_tp: %8llu Kbps\n"
+		"          tx_tp: %8llu Kbps\n"
+		, data.io_num
+		, data.himr_io_num
+		, data.hisr_io_num
+		, data.rx_io_num
+		, data.tx_io_num
+		, data.rx_aval_io_num
+		, data.tx_aval_io_num
+		, data.other_io_num
+
+		, SEC_ARG(rtw_sptime_diff_ns(data.stime, data.etime))
+		, SEC_ARG(rtw_sptime_to_ns(data.io_time))
+		, SEC_ARG(rtw_sptime_to_ns(data.himr_io_time)), PCT2_ARG(rtw_sptime_to_ns(data.himr_io_time), rtw_sptime_to_ns(data.io_time))
+		, SEC_ARG(rtw_sptime_to_ns(data.hisr_io_time)), PCT2_ARG(rtw_sptime_to_ns(data.hisr_io_time), rtw_sptime_to_ns(data.io_time))
+		, SEC_ARG(rtw_sptime_to_ns(data.rx_io_time)), PCT2_ARG(rtw_sptime_to_ns(data.rx_io_time), rtw_sptime_to_ns(data.io_time))
+		, SEC_ARG(rtw_sptime_to_ns(data.tx_io_time)), PCT2_ARG(rtw_sptime_to_ns(data.tx_io_time), rtw_sptime_to_ns(data.io_time))
+		, SEC_ARG(rtw_sptime_to_ns(data.rx_aval_io_time)), PCT2_ARG(rtw_sptime_to_ns(data.rx_aval_io_time), rtw_sptime_to_ns(data.io_time))
+		, SEC_ARG(rtw_sptime_to_ns(data.tx_aval_io_time)), PCT2_ARG(rtw_sptime_to_ns(data.tx_aval_io_time), rtw_sptime_to_ns(data.io_time))
+		, SEC_ARG(rtw_sptime_to_ns(data.other_io_time)), PCT2_ARG(rtw_sptime_to_ns(data.other_io_time), rtw_sptime_to_ns(data.io_time))
+
+		, SEC_ARG(rtw_sptime_to_ns(data.rx_io_int_total))
+		, SEC_ARG(rtw_sptime_to_ns(data.rx_io_int_min))
+		, SEC_ARG(rtw_sptime_to_ns(data.rx_io_int_max))
+		, SEC_ARG(rtw_sptime_to_ns(data.rx_io_int_avg))
+
+		, SEC_ARG(rtw_sptime_to_ns(data.tx_io_int_total))
+		, SEC_ARG(rtw_sptime_to_ns(data.tx_io_int_min))
+		, SEC_ARG(rtw_sptime_to_ns(data.tx_io_int_max))
+		, SEC_ARG(rtw_sptime_to_ns(data.tx_io_int_avg))
+
+		, data.rx_io_len_total
+		, data.rx_io_len_min
+		, data.rx_io_len_max
+		, rtw_division64(data.rx_io_len_total, data.rx_io_num)
+
+		, data.tx_io_len_total
+		, data.tx_io_len_min
+		, data.tx_io_len_max
+		, rtw_division64(data.tx_io_len_total, data.tx_io_num)
+
+		, rtw_division64(data.rx_io_len_avg * 8, 1024)
+		, rtw_division64(data.tx_io_len_avg * 8, 1024)
+		);
 }
 
 void rtw_sdio_records_claim_and_enable(struct dvobj_priv *d, bool enable)
@@ -416,8 +550,8 @@ void rtw_sdio_records_claim_and_enable(struct dvobj_priv *d, bool enable)
 	struct sdio_func *func;
 	bool claim_needed;
 
-#if !CONFIG_RTW_SDIO_RECORDS_STATIC
-	if (!dbg_sdio_records.record) {
+#if !CONFIG_RTW_IO_RECORDS_STATIC
+	if (!dbg_rtw_io_records.record) {
 		rtw_warn_on(1);
 		return;
 	}
@@ -429,65 +563,12 @@ void rtw_sdio_records_claim_and_enable(struct dvobj_priv *d, bool enable)
 		sdio_claim_host(func);
 
 	RTW_INFO("%s enable:%d\n", __func__, enable);
-	dbg_sdio_records.enable = enable;
+	dbg_rtw_io_records.enable = enable;
 
 	if (claim_needed)
 		sdio_release_host(func);
 }
-
-void rtw_sdio_records_claim_and_dump(void *sel, struct dvobj_priv *d, bool tab)
-{
-	struct sdio_func *func = dvobj_to_sdio_func(d);
-	bool claim_needed = rtw_sdio_claim_host_needed(func);
-
-	if (claim_needed)
-		sdio_claim_host(func);
-
-	rtw_sdio_records_dump(sel, tab);
-
-	if (claim_needed)
-		sdio_release_host(func);
-}
-
-int rtw_sdio_records_init(void)
-{
-#if !CONFIG_RTW_SDIO_RECORDS_STATIC
-extern uint rtw_sdio_records_num;
-extern uint rtw_sdio_records_enable;
-extern uint rtw_sdio_records_loop;
-
-	size_t record_num = rtw_sdio_records_num;
-	bool enable = !!rtw_sdio_records_enable;
-	bool loop = !!rtw_sdio_records_loop;
-
-	dbg_sdio_records.record = rtw_zvmalloc(sizeof(struct sdio_record) * record_num);
-	if (!dbg_sdio_records.record)
-		return _FAIL;
-
-	dbg_sdio_records.record_num = record_num;
-	dbg_sdio_records.loop = loop;
-	dbg_sdio_records.pos = 0;
-	dbg_sdio_records.enable = enable;
-#endif
-	return _SUCCESS;
-}
-
-void rtw_sdio_records_deinit(void)
-{
-#if !CONFIG_RTW_SDIO_RECORDS_STATIC
-	if (dbg_sdio_records.record)
-		rtw_vmfree(dbg_sdio_records.record, sizeof(struct sdio_record) * dbg_sdio_records.record_num);
-#endif
-}
-
-#else
-#define DECLARE_DBG_SDIO_RECORD_P(_r)
-#define dbg_sdio_record_get_and_advance(_r) do {} while (0)
-#define dbg_sdio_record_fill_1(_r, _type, _addr, _err, _data) do {} while (0)
-#define dbg_sdio_record_fill_n(_r, _type, _addr, _cnt, _err, _data) do {} while (0)
-#define dbg_sdio_record_fill_w(_r, _type, _addr, _err, _w) do {} while (0)
-#define dbg_sdio_record_fill_dw(_r, _type, _addr, _err, _dw) do {} while (0)
-#endif /* CONFIG_RTW_SDIO_RECORDS */
+#endif /* CONFIG_RTW_IO_RECORDS */
 
 /*#define RTW_SDIO_DUMP*/
 #ifdef RTW_SDIO_DUMP
@@ -720,7 +801,7 @@ int __must_check rtw_sdio_raw_read(struct dvobj_priv *d, unsigned int addr,
 	u32 offset, i;
 	struct sdio_data *sdio;
 	u8 *tmpbuf = NULL;
-	DECLARE_DBG_SDIO_RECORD_P(r);
+	DECLARE_DBG_RTW_IO_RECORD_P(r);
 
 	func = dvobj_to_sdio_func(d);
 	claim_needed = rtw_sdio_claim_host_needed(func);
@@ -754,9 +835,10 @@ int __must_check rtw_sdio_raw_read(struct dvobj_priv *d, unsigned int addr,
 	if (f0) {
 		offset = addr;
 		for (i = 0; i < len; i++, offset++) {
-			dbg_sdio_record_get_and_advance(r);
+			dbg_rtw_io_record_get_and_advance(r);
+			dbg_rtw_io_record_fill_stime(r);
 			((u8 *)buf)[i] = sdio_f0_readb(func, offset, &error);
-			dbg_sdio_record_fill_1(r, SDIO_CMDT_F0_52_READ, offset, error, ((u8 *)buf) + i);
+			dbg_rtw_io_record_fill_1(r, SDIO_CMDT_F0_52_READ, offset, error, ((u8 *)buf) + i);
 			if (error)
 				break;
 #if 0
@@ -772,9 +854,10 @@ int __must_check rtw_sdio_raw_read(struct dvobj_priv *d, unsigned int addr,
 #endif
 			offset = addr;
 			for (i = 0; i < len; i++) {
-				dbg_sdio_record_get_and_advance(r);
+				dbg_rtw_io_record_get_and_advance(r);
+				dbg_rtw_io_record_fill_stime(r);
 				((u8 *)buf)[i] = sdio_readb(func, offset, &error);
-				dbg_sdio_record_fill_1(r, SDIO_CMDT_52_READ, offset, error, ((u8 *)buf) + i);
+				dbg_rtw_io_record_fill_1(r, SDIO_CMDT_52_READ, offset, error, ((u8 *)buf) + i);
 				if (error)
 					break;
 #if 0
@@ -794,13 +877,15 @@ int __must_check rtw_sdio_raw_read(struct dvobj_priv *d, unsigned int addr,
 				buf = sdio->tmpbuf;
 			}
 			if (fixed) {
-				dbg_sdio_record_get_and_advance(r);
+				dbg_rtw_io_record_get_and_advance(r);
+				dbg_rtw_io_record_fill_stime(r);
 				error = sdio_readsb(func, buf, addr, len);
-				dbg_sdio_record_fill_n(r, SDIO_CMDT_53_READ, addr, len, error, buf);
+				dbg_rtw_io_record_fill_n(r, SDIO_CMDT_53_READ, addr, len, error, buf);
 			} else {
-				dbg_sdio_record_get_and_advance(r);
+				dbg_rtw_io_record_get_and_advance(r);
+				dbg_rtw_io_record_fill_stime(r);
 				error = sdio_memcpy_fromio(func, buf, addr, len);
-				dbg_sdio_record_fill_n(r, SDIO_CMDT_53_READ, addr, len, error, buf);
+				dbg_rtw_io_record_fill_n(r, SDIO_CMDT_53_READ, addr, len, error, buf);
 			}
 			if (!error && tmpbuf)
 				_rtw_memcpy(tmpbuf, buf, len);
@@ -882,7 +967,7 @@ int __must_check rtw_sdio_raw_write(struct dvobj_priv *d, unsigned int addr,
 	bool claim_needed;
 	u32 offset, i;
 	struct sdio_data *sdio;
-	DECLARE_DBG_SDIO_RECORD_P(r);
+	DECLARE_DBG_RTW_IO_RECORD_P(r);
 
 	func = dvobj_to_sdio_func(d);
 	claim_needed = rtw_sdio_claim_host_needed(func);
@@ -918,9 +1003,10 @@ int __must_check rtw_sdio_raw_write(struct dvobj_priv *d, unsigned int addr,
 	if (f0) {
 		offset = addr;
 		for (i = 0; i < len; i++, offset++) {
-			dbg_sdio_record_get_and_advance(r);
+			dbg_rtw_io_record_get_and_advance(r);
+			dbg_rtw_io_record_fill_stime(r);
 			sdio_f0_writeb(func, ((u8 *)buf)[i], offset, &error);
-			dbg_sdio_record_fill_1(r, SDIO_CMDT_F0_52_WRITE, offset, error, ((u8 *)buf) + i);
+			dbg_rtw_io_record_fill_1(r, SDIO_CMDT_F0_52_WRITE, offset, error, ((u8 *)buf) + i);
 			if (error)
 				break;
 #if 0
@@ -936,9 +1022,10 @@ int __must_check rtw_sdio_raw_write(struct dvobj_priv *d, unsigned int addr,
 #endif
 			offset = addr;
 			for (i = 0; i < len; i++) {
-				dbg_sdio_record_get_and_advance(r);
+				dbg_rtw_io_record_get_and_advance(r);
+				dbg_rtw_io_record_fill_stime(r);
 				sdio_writeb(func, ((u8 *)buf)[i], offset, &error);
-				dbg_sdio_record_fill_1(r, SDIO_CMDT_52_WRITE, offset, error, ((u8 *)buf) + i);
+				dbg_rtw_io_record_fill_1(r, SDIO_CMDT_52_WRITE, offset, error, ((u8 *)buf) + i);
 				if (error)
 					break;
 #if 0
@@ -958,13 +1045,15 @@ int __must_check rtw_sdio_raw_write(struct dvobj_priv *d, unsigned int addr,
 				buf = sdio->tmpbuf;
 			}
 			if (fixed) {
-				dbg_sdio_record_get_and_advance(r);
+				dbg_rtw_io_record_get_and_advance(r);
+				dbg_rtw_io_record_fill_stime(r);
 				error = sdio_writesb(func, addr, buf, len);
-				dbg_sdio_record_fill_n(r, SDIO_CMDT_53_WRITE, addr, len, error, buf);
+				dbg_rtw_io_record_fill_n(r, SDIO_CMDT_53_WRITE, addr, len, error, buf);
 			} else {
-				dbg_sdio_record_get_and_advance(r);
+				dbg_rtw_io_record_get_and_advance(r);
+				dbg_rtw_io_record_fill_stime(r);
 				error = sdio_memcpy_toio(func, addr, buf, len);
-				dbg_sdio_record_fill_n(r, SDIO_CMDT_53_WRITE, addr, len, error, buf);
+				dbg_rtw_io_record_fill_n(r, SDIO_CMDT_53_WRITE, addr, len, error, buf);
 			}
 		}
 	}

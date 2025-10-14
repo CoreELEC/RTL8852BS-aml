@@ -926,7 +926,7 @@ static void rtw_sta_ecsa_invalid_hdl(struct _ADAPTER *a)
 
 	/* This context can't I/O, so use RTW_CMDF_DIRECTLY */
 	rtw_disassoc_cmd(a, 0, RTW_CMDF_DIRECTLY);
-	rtw_indicate_disconnect(a, 0, _FALSE);
+	rtw_indicate_disconnect(a, 0, _TRUE);
 	rtw_free_network_queue(a, _TRUE);
 	rtw_free_mld_network_queue(a, _TRUE);
 	RTW_INFO("CSA : "FUNC_ADPT_FMT" disconnect with AP\n", FUNC_ADPT_ARG(a));
