@@ -149,8 +149,8 @@ CONFIG_RTKM ?= n
 CONFIG_RTW_DEBUG = y
 # default log level is _DRV_INFO_ = 4,
 # please refer to "How_to_set_driver_debug_log_level.doc" to set the available level.
-CONFIG_RTW_LOG_LEVEL = 4
-CONFIG_RTW_PHL_LOG_LEVEL = 4
+CONFIG_RTW_LOG_LEVEL = 0
+CONFIG_RTW_PHL_LOG_LEVEL = 0
 
 # CONFIG_RTW_APPEND_LOGLEVEL decide if append kernel log level to each messages.
 # default "n" for don't append.
@@ -270,7 +270,7 @@ EXTRA_CFLAGS += -DCONFIG_RTW_ANDROID=$(CONFIG_RTW_ANDROID)
 CONFIG_GOOGLE_CAST_WAKEUP = n
 
 # For BAZEL BUILD
-CONFIG_GKI_BAZEL = y
+CONFIG_GKI_BAZEL = n
 
 ifeq ($(CONFIG_GKI_BAZEL), y)
 # UNUSED DUMMY INFO
@@ -933,7 +933,7 @@ generate_build_bazel:
 	@$(foreach var,$(.VARIABLES), \
 		$(if $(filter-out environment% default automatic, $(origin $(var))), \
 			echo $(var) = $($(var)) >> makefile_var;))
-	python3 gen_build_bazel.py
+	#python3 gen_build_bazel.py
 
 else
 
