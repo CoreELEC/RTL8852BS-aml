@@ -1926,7 +1926,7 @@ extern char *rtw_initmac;
  */
 void rtw_macaddr_cfg(u8 *out, const u8 *hw_mac_addr)
 {
-#define DEFAULT_RANDOM_MACADDR 1
+#define DEFAULT_RANDOM_MACADDR 0
 	u8 mac[ETH_ALEN];
 
 	if (out == NULL) {
