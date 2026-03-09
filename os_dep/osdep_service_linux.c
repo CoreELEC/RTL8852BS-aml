@@ -442,6 +442,9 @@ static int readFile(struct file *fp, char *buf, int len)
 }
 
 #ifndef CONFIG_RTW_ANDROID
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 119))
+MODULE_IMPORT_NS(VFS_internal_I_am_really_a_filesystem_and_am_NOT_a_driver);
+#endif
 static int writeFile(struct file *fp, char *buf, int len)
 {
 	int wlen = 0, sum = 0;
