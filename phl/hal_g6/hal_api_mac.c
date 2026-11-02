@@ -4725,6 +4725,7 @@ enum rtw_hal_status
 rtw_hal_mac_cfg_periodic_wake(struct hal_info_t *hal, u16 macid, u8 en,
 			      struct rtw_periodic_wake_info *cfg)
 {
+#if MAC_FEAT_LPS
 	struct mac_ax_adapter *mac = hal_to_mac(hal);
 	struct mac_ax_periodic_wake_info info = {0};
 
@@ -4739,6 +4740,10 @@ rtw_hal_mac_cfg_periodic_wake(struct hal_info_t *hal, u16 macid, u8 en,
 		return RTW_HAL_STATUS_FAILURE;
 
 	return RTW_HAL_STATUS_SUCCESS;
+#else
+	/* periodic_wake_cfg() is part of MAC LPS support (CONFIG_POWER_SAVE) */
+	return RTW_HAL_STATUS_NOT_SUPPORT;
+#endif
 }
 
 enum rtw_hal_status

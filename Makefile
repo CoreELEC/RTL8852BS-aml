@@ -17,7 +17,7 @@ EXTRA_CFLAGS += -Wno-unused
 
 ############ ANDROID COMMON KERNEL ############
 # clang
-ifeq ($(CC), clang)
+ifeq ($(CONFIG_CC_IS_CLANG), y)
 EXTRA_CFLAGS += -Wno-uninitialized
 EXTRA_CFLAGS += -Wno-enum-conversion
 EXTRA_CFLAGS += -Wno-fortify-source
@@ -859,12 +859,13 @@ EXTRA_CFLAGS += -I$(src)/platform
 #_PLATFORM_FILES := platform/platform_ops.o
 OBJS += $(_PLATFORM_FILES)
 
-KER_MAJOR_6 := $(shell cd $(KSRC); echo `make kernelversion | cut -d. -f1` \>= 6 | bc -l)
-KER_MINOR_13 := $(shell cd $(KSRC); echo `make kernelversion | cut -d. -f2` \>= 13 | bc -l)
-ifeq ($(KER_MAJOR_6), 1)
-ifeq ($(KER_MINOR_13), 1)
+# Linux >= 6.13: read the version of the prepared kernel tree instead of
+# running "make kernelversion" in $(KSRC) (breaks the jobserver and
+# compared the minor version only, e.g. 7.0 was treated as < 6.13)
+KER_RELEASE := $(shell cat $(KSRC)/include/config/kernel.release 2>/dev/null)
+KER_GE_6_13 := $(shell echo "$(KER_RELEASE)" | awk -F'[.-]' '{ print ($$1 > 6 || ($$1 == 6 && $$2 >= 13)) ? 1 : 0 }')
+ifeq ($(KER_GE_6_13), 1)
 export KBUILD_ABS_SRCTREE := 1
-endif
 endif
 
 ########### CUSTOMER ################################
